@@ -18,5 +18,8 @@
     "mocha": "^11.7.5",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.5"
   }
 }

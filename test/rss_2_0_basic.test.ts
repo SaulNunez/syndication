@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { parseRSS } from "../src/index.js";
-import { RSSChannel } from "../src/types.js";
+import { RSSChannel } from "../src/types";
 
 const sample = `
 <?xml version="1.0"?>

@@ -112,7 +112,7 @@ export interface AtomContent {
  * Represents a Person construct in Atom.
  * @see https://www.rfc-editor.org/rfc/rfc4287#section-3.2
  */
-interface AtomAuthor {
+export interface AtomAuthor {
     /** A human-readable name for the person. */
     name: string;
     /** An email address for the person. */
@@ -159,6 +159,7 @@ export interface AtomFeed extends AtomSource {
     content?: AtomContent;
     /** The entries in the feed. */
     entries: AtomEntry[];
+    extra: Record<string, any>;
 }
 
 /**

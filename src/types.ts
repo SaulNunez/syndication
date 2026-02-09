@@ -12,7 +12,7 @@ interface BaseItem {
     title: string;
     /** The URL of the item. */
     link: string;
-    
+
 }
 
 /**
@@ -177,4 +177,7 @@ export interface AtomEntry extends BaseItem {
     extra: Record<string, any>;
     /** If an entry is copied from one feed into another, the source element preserves metadata from the source feed. */
     source?: AtomSource;
+    id: string;
+    author: AtomAuthor;
+    contributors?: AtomAuthor[];
 }

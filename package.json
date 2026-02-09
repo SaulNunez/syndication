@@ -2,9 +2,21 @@
   "name": "syndication",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "test": "mocha --no-warnings --loader=ts-node/esm 'test/**/*.test.ts'"
+    "test": "mocha --no-warnings --loader=ts-node/esm 'test/**/*.test.ts'",
+    "build": "tsup"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +29,7 @@
     "chai": "^6.2.2",
     "mocha": "^11.7.5",
     "ts-mocha": "^11.1.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
   "dependencies": {

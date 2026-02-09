@@ -4,13 +4,19 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha --no-warnings --loader=ts-node/esm 'test/**/*.test.ts'"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/expect": "^1.20.4",
+    "@types/mocha": "^10.0.10",
+    "chai": "^6.2.2",
+    "mocha": "^11.7.5",
+    "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"
   }
 }

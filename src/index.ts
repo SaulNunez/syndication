@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
-import { RSSAuthor, RSSChannel, RSSItem } from "./types.js";
+import { AtomFeed, RSSAuthor, RSSChannel, RSSItem } from "./types.js";
 
-export function parseRSS(rssString: string): RSSChannel {
+export function parseRSS(rssString: string): RSSChannel | AtomFeed {
     const parser = new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: "@_",

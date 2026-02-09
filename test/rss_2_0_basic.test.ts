@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { parseRSS } from "../src/index.js";
+import { RSSChannel } from "../src/types.js";
 
 const sample = `
 <?xml version="1.0"?>
@@ -58,7 +59,7 @@ const sample = `
 
 describe('Parsing RSS Channel information', () => {
     it('Test feed', () => {
-        const rss = parseRSS(sample);
+        const rss = parseRSS(sample) as RSSChannel;
         expect(rss.title).to.equal('NASA Space Station News');
         expect(rss.link).to.equal('http://www.nasa.gov/');
         expect(rss.description).to.equal('A RSS news feed containing the latest NASA press releases on the International Space Station.');
@@ -111,7 +112,7 @@ describe('Parsing RSS Items', () => {
 
     items.forEach((item, index) => {
         it(`Test item ${index + 1}`, () => {
-            const rss = parseRSS(sample);
+            const rss = parseRSS(sample) as RSSChannel;
             expect(rss.items[index].title).to.equal(item.title);
             expect(rss.items[index].link).to.equal(item.link);
             expect(rss.items[index].description).to.equal(item.description);
@@ -121,7 +122,7 @@ describe('Parsing RSS Items', () => {
     });
 
     it('Test item with enclosure', () => {
-        const rss = parseRSS(sample);
+        const rss = parseRSS(sample) as RSSChannel;
         const item = rss.items[2];
         expect(item.enclosure.url).to.equal('http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx');
         expect(item.enclosure.length).to.equal(1032272);

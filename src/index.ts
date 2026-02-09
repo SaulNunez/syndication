@@ -66,6 +66,14 @@ function parseAtom(feedRaw: any): AtomFeed {
 }
 
 function mapAtomEntry(entryRaw: any): AtomEntry {
+    const contentRaw = entryRaw.content;
+    const contentType = contentRaw ? contentRaw["@_type"] : undefined;
+    let contentValue = contentRaw ? getContentValue(contentRaw) : undefined;
+
+    if (contentType === 'html' && contentValue) {
+        contentValue = decodeHtmlEntities(contentValue);
+    }
+
     return {
         id: entryRaw.id,
         title: getTypeContent(entryRaw.title),
@@ -73,9 +81,9 @@ function mapAtomEntry(entryRaw: any): AtomEntry {
         published: entryRaw.published,
         link: getLinkHref(entryRaw.link),
         summary: getTypeContent(entryRaw.summary),
-        content: entryRaw.content ? {
-            type: entryRaw.content["@_type"],
-            value: getContentValue(entryRaw.content)
+        content: contentRaw ? {
+            type: contentType,
+            value: contentValue
         } : undefined,
         author: entryRaw.author ? getAtomAuthor(entryRaw.author) : { name: "" },
         contributors: entryRaw.contributor ? (Array.isArray(entryRaw.contributor) ? entryRaw.contributor.map(getAtomAuthor) : [getAtomAuthor(entryRaw.contributor)]) : undefined,
@@ -155,4 +163,17 @@ export function getAuthorInfo(authorString: string): RSSAuthor | string {
     const email = authorString.substring(0, emailEndIndex).trim();
     const name = authorString.substring(emailEndIndex + 2, authorString.length - 1).trim();
     return { name, email };
+}
+
+function decodeHtmlEntities(str: string): string {
+    const namedEntities: { [key: string]: string } = {
+        '&quot;': '"',
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&apos;': "'"
+    };
+    return str.replace(/&#(\d+);/g, (_match, dec) => String.fromCharCode(parseInt(dec, 10)))
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&[a-z]+;/g, (match) => namedEntities[match] || match);
 }

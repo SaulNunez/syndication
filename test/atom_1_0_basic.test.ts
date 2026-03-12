@@ -75,8 +75,9 @@ describe('Parsing Atom 1.0 Entry information', () => {
         expect(entry.author.name).to.equal('Mark Pilgrim');
         expect(entry.author.uri).to.equal('http://example.org/');
         expect(entry.author.email).to.equal('f8dy@example.com');
-        expect(entry.contributors?.at(0)?.name).to.equal('Sam Ruby');
-        expect(entry.contributors?.at(1)?.name).to.equal('Joe Gregorio');
+        expect(entry.contributors).to.have.lengthOf(2);
+        expect(entry.contributors?.[0].name).to.equal('Sam Ruby');
+        expect(entry.contributors?.[1].name).to.equal('Joe Gregorio');
         expect(entry.content?.value).to.equal('<div xmlns="http://www.w3.org/1999/xhtml"><p><i>[Update: The Atom draft is finished.]</i></p></div>');
     });
 });

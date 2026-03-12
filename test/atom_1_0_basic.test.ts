@@ -66,7 +66,7 @@ describe('Parsing Atom 1.0 Feed information', () => {
 describe('Parsing Atom 1.0 Entry information', () => {
     it('Test entry', () => {
         const atom = parseRSS(sample) as AtomFeed;
-        const entry = atom.entries[0];
+        const entry = atom.items[0];
         expect(entry.title).to.equal('Atom draft-07 snapshot');
         expect(entry.link).to.equal('http://example.org/2005/04/02/atom');
         expect(entry.id).to.equal('tag:example.org,2003:3.2397');

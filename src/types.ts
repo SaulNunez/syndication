@@ -158,7 +158,7 @@ export interface AtomFeed extends AtomSource {
     /** Content of the feed. */
     content?: AtomContent;
     /** The entries in the feed. */
-    entries: AtomEntry[];
+    items: AtomEntry[];
     extra: Record<string, any>;
 }
 

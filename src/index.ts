@@ -59,7 +59,7 @@ function parseAtom(feedRaw: any): AtomFeed {
         author: feedRaw.author ? getAtomAuthor(feedRaw.author) : undefined,
         logo: feedRaw.logo,
         icon: feedRaw.icon,
-        entries: entries,
+        items: entries,
         description: getTypeContent(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
         extra: {}
     };

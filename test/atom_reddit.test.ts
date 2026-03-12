@@ -44,8 +44,8 @@ describe('Parsing Atom feed', () => {
 
     it('Test Reddit entry gets parsed correctly', () => {
         const feed = parseRSS(sample_programming_subreddit) as AtomFeed;
-        expect(feed.entries.length).to.equal(1);
-        const entry = feed.entries[0];
+        expect(feed.items.length).to.equal(1);
+        const entry = feed.items[0];
         expect(entry.title).to.equal('State of the Subreddit (January 2027): Mods applications and rules updates');
         expect(entry.link).to.equal('https://www.reddit.com/r/programming/comments/1qoxwdt/state_of_the_subreddit_january_2027_mods/');
         expect(entry.id).to.equal('t3_1qoxwdt');

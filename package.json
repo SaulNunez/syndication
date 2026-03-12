@@ -1,7 +1,7 @@
 {
   "name": "syndication",
   "version": "1.0.0",
-  "description": "",
+  "description": "A library for parsing RSS and Atom feeds.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

@@ -1,5 +1,5 @@
 {
-  "name": "syndication",
+  "name": "@saulnunez/syndication",
   "version": "1.0.0",
   "description": "A library for parsing RSS and Atom feeds.",
   "repository": {

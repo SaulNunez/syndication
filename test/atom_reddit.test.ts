@@ -53,7 +53,7 @@ describe('Parsing Atom feed', () => {
         expect(entry.published).to.equal('2026-01-28T01:54:14+00:00');
         expect(entry.author.name).to.equal('/u/ketralnis');
         expect(entry.author.uri).to.equal('https://www.reddit.com/user/ketralnis');
-        expect(entry.content.type).to.equal('html');
-        expect(entry.content.value).to.equal(unescaped_content);
+        expect(entry.content?.type).to.equal('html');
+        expect(entry.content?.value).to.equal(unescaped_content);
     });
 });

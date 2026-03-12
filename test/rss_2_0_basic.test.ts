@@ -68,10 +68,10 @@ describe('Parsing RSS Channel information', () => {
         expect(rss.lastBuildDate).to.equal('Fri, 21 Jul 2023 09:04 EDT');
         expect(rss.docs).to.equal('https://www.rssboard.org/rss-specification');
         expect(rss.generator).to.equal('Blosxom 2.1.2');
-        expect(rss.managingEditor.email).to.equal('neil.armstrong@example.com');
-        expect(rss.managingEditor.name).to.equal('Neil Armstrong');
-        expect(rss.webMaster.email).to.equal('sally.ride@example.com');
-        expect(rss.webMaster.name).to.equal('Sally Ride');
+        expect(rss.managingEditor?.email).to.equal('neil.armstrong@example.com');
+        expect(rss.managingEditor?.name).to.equal('Neil Armstrong');
+        expect(rss.webMaster?.email).to.equal('sally.ride@example.com');
+        expect(rss.webMaster?.name).to.equal('Sally Ride');
     });
 });
 
@@ -124,8 +124,8 @@ describe('Parsing RSS Items', () => {
     it('Test item with enclosure', () => {
         const rss = parseRSS(sample) as RSSChannel;
         const item = rss.items[2];
-        expect(item.enclosure.url).to.equal('http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx');
-        expect(item.enclosure.length).to.equal(1032272);
-        expect(item.enclosure.type).to.equal('image/jpeg');
+        expect(item.enclosure?.url).to.equal('http://www.nasa.gov/sites/default/files/styles/1x1_cardfeed/public/thumbnails/image/iss068e027836orig.jpg?itok=ucNUaaGx');
+        expect(item.enclosure?.length).to.equal(1032272);
+        expect(item.enclosure?.type).to.equal('image/jpeg');
     });
 });

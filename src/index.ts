@@ -34,27 +34,34 @@ export function parseRSS(rssString: string): RSSChannel | AtomFeed {
         docs: channelRaw.docs,
         generator: channelRaw.generator,
         ttl: channelRaw.ttl || 60,
+        copyright: channelRaw.copyright,
         managingEditor: channelRaw.managingEditor ? (getAuthorInfo(channelRaw.managingEditor) as RSSAuthor) : undefined,
         webMaster: channelRaw.webMaster ? (getAuthorInfo(channelRaw.webMaster) as RSSAuthor) : undefined,
         items: items,
         extra: {}
     };
 
+    const itunes = processChannelItunes(channelRaw);
+    if (itunes) {
+        channel.itunes = itunes;
+    }
+
     return channel;
 }
 
 function parseAtom(feedRaw: any): AtomFeed {
+    const feedBaseUrl = feedRaw["@_xml:base"];
     const entries: AtomEntry[] = Array.isArray(feedRaw.entry)
-        ? feedRaw.entry.map(mapAtomEntry)
-        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry)] : []);
+        ? feedRaw.entry.map((entry: any) => mapAtomEntry(entry, feedBaseUrl))
+        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl)] : []);
 
     return {
         id: feedRaw.id,
         title: getTypeContent(feedRaw.title),
-        updated: feedRaw.updated,
-        link: getLinkHref(feedRaw.link),
-        subtitle: getTypeContent(feedRaw.subtitle),
-        rights: feedRaw.rights,
+        updated: feedRaw.updated || feedRaw.modified,
+        link: resolveUrl(getLinkHref(feedRaw.link), feedBaseUrl),
+        subtitle: getTypeContent(feedRaw.subtitle || feedRaw.tagline),
+        rights: feedRaw.rights ? getTypeContent(feedRaw.rights) : (feedRaw.copyright ? getTypeContent(feedRaw.copyright) : undefined),
         generator: getTypeContent(feedRaw.generator),
         author: feedRaw.author ? getAtomAuthor(feedRaw.author) : undefined,
         logo: feedRaw.logo,
@@ -65,7 +72,8 @@ function parseAtom(feedRaw: any): AtomFeed {
     };
 }
 
-function mapAtomEntry(entryRaw: any): AtomEntry {
+function mapAtomEntry(entryRaw: any, feedBaseUrl?: string): AtomEntry {
+    const entryBaseUrl = entryRaw["@_xml:base"] || feedBaseUrl;
     const contentRaw = entryRaw.content;
     const contentType = contentRaw ? contentRaw["@_type"] : undefined;
     let contentValue = contentRaw ? getContentValue(contentRaw) : undefined;
@@ -77,9 +85,9 @@ function mapAtomEntry(entryRaw: any): AtomEntry {
     return {
         id: entryRaw.id,
         title: getTypeContent(entryRaw.title),
-        updated: entryRaw.updated,
-        published: entryRaw.published,
-        link: getLinkHref(entryRaw.link),
+        updated: entryRaw.updated || entryRaw.modified,
+        published: entryRaw.published || entryRaw.issued || entryRaw.created,
+        link: resolveUrl(getLinkHref(entryRaw.link), entryBaseUrl),
         summary: getTypeContent(entryRaw.summary),
         content: contentRaw ? {
             type: contentType,
@@ -117,16 +125,27 @@ function getAtomAuthor(authorRaw: any): AtomAuthor {
     return {
         name: authorRaw.name,
         email: authorRaw.email,
-        uri: authorRaw.uri
+        uri: authorRaw.uri || authorRaw.url
     };
 }
 
-function getLinkHref(linkRaw: any): string {
+function getLinkHref(linkRaw: any): string | undefined {
+    if (!linkRaw) return undefined;
     if (Array.isArray(linkRaw)) {
         const alternate = linkRaw.find((l: any) => l["@_rel"] === "alternate" || !l["@_rel"]);
         return alternate ? alternate["@_href"] : linkRaw[0]["@_href"];
     }
     return linkRaw["@_href"];
+}
+
+function resolveUrl(url: string | undefined, baseUrl: string | undefined): string | undefined {
+    if (!url) return undefined;
+    if (!baseUrl) return url;
+    try {
+        return new URL(url, baseUrl).href;
+    } catch (e) {
+        return url;
+    }
 }
 
 function getTypeContent(contentRaw: any): string {
@@ -140,7 +159,7 @@ function getTypeContent(contentRaw: any): string {
 }
 
 function mapItem(itemRaw: any): RSSItem {
-    return {
+    const item: RSSItem = {
         title: itemRaw.title,
         link: itemRaw.link,
         description: itemRaw.description,
@@ -153,6 +172,13 @@ function mapItem(itemRaw: any): RSSItem {
         } : undefined,
         extra: {}
     };
+
+    const itunes = processItemItunes(itemRaw);
+    if (itunes) {
+        item.itunes = itunes;
+    }
+
+    return item;
 }
 
 export function getAuthorInfo(authorString: string): RSSAuthor | string {
@@ -176,4 +202,106 @@ function decodeHtmlEntities(str: string): string {
     return str.replace(/&#(\d+);/g, (_match, dec) => String.fromCharCode(parseInt(dec, 10)))
         .replace(/&#x([0-9A-Fa-f]+);/g, (_match, hex) => String.fromCharCode(parseInt(hex, 16)))
         .replace(/&[a-z]+;/g, (match) => namedEntities[match] || match);
+}
+
+function parseItunesCategories(categoryRaw: any): string[] {
+    if (!categoryRaw) return [];
+    const categories: string[] = [];
+    const processCategory = (cat: any) => {
+        if (!cat) return;
+        if (cat["@_text"]) {
+            categories.push(cat["@_text"]);
+        }
+        if (cat["itunes:category"]) {
+            if (Array.isArray(cat["itunes:category"])) {
+                cat["itunes:category"].forEach(processCategory);
+            } else {
+                processCategory(cat["itunes:category"]);
+            }
+        }
+    };
+    if (Array.isArray(categoryRaw)) {
+        categoryRaw.forEach(processCategory);
+    } else {
+        processCategory(categoryRaw);
+    }
+    return categories;
+}
+
+function parseItunesDuration(durationRaw: any): number | undefined {
+    if (durationRaw === undefined || durationRaw === null) return undefined;
+    if (typeof durationRaw === 'number') return durationRaw;
+    const parts = String(durationRaw).split(':').map(Number);
+    if (parts.some(isNaN)) return undefined;
+    
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    } else if (parts.length === 1) {
+        return parts[0];
+    }
+    return undefined;
+}
+
+function parseItunesExplicit(explicitRaw: any): boolean | undefined {
+    if (explicitRaw === undefined || explicitRaw === null) return undefined;
+    if (typeof explicitRaw === 'boolean') return explicitRaw;
+    const str = String(explicitRaw).toLowerCase();
+    if (str === 'yes' || str === 'true') return true;
+    if (str === 'no' || str === 'false') return false;
+    return undefined;
+}
+
+function parseItunesEpisode(episodeRaw: any): number | undefined {
+    if (episodeRaw === undefined || episodeRaw === null) return undefined;
+    if (typeof episodeRaw === 'number') return episodeRaw;
+    const num = Number(episodeRaw);
+    return isNaN(num) ? undefined : num;
+}
+
+function processChannelItunes(channelRaw: any) {
+    const itunesFields: any = {
+        author: channelRaw['itunes:author'],
+        categories: parseItunesCategories(channelRaw['itunes:category']),
+        explicit: parseItunesExplicit(channelRaw['itunes:explicit']),
+        image: channelRaw['itunes:image'] ? channelRaw['itunes:image']['@_href'] : undefined,
+        keywords: channelRaw['itunes:keywords'],
+        type: channelRaw['itunes:type']
+    };
+
+    if (itunesFields.categories.length === 0) {
+        delete itunesFields.categories;
+    }
+
+    Object.keys(itunesFields).forEach((key) => {
+        if (itunesFields[key] === undefined) {
+            delete itunesFields[key];
+        }
+    });
+
+    if (Object.keys(itunesFields).length > 0) {
+        return itunesFields;
+    }
+    return undefined;
+}
+
+function processItemItunes(itemRaw: any) {
+    const itunesFields: any = {
+        episode: parseItunesEpisode(itemRaw['itunes:episode']),
+        episodeType: itemRaw['itunes:episodeType'],
+        duration: parseItunesDuration(itemRaw['itunes:duration']),
+        explicit: parseItunesExplicit(itemRaw['itunes:explicit']),
+    };
+
+    Object.keys(itunesFields).forEach((key) => {
+        if (itunesFields[key] === undefined) {
+            delete itunesFields[key];
+        }
+    });
+
+    if (Object.keys(itunesFields).length > 0) {
+        return itunesFields;
+    }
+    return undefined;
 }

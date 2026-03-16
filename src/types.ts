@@ -4,7 +4,7 @@ interface BaseChannel {
     /** The URL to the HTML website corresponding to the channel. */
     link: string;
     /** Phrase or sentence describing the channel. */
-    description: string;
+    description: string | undefined;
 }
 
 interface BaseItem {
@@ -42,6 +42,19 @@ export interface RSSChannel extends BaseChannel {
     docs?: string;
     generator?: string;
     items: RSSItem[];
+    copyright?: string;
+    /**
+     * If feed is an iTunes podcast, this object will contain fields from the iTunes namespace
+     * @see https://help.apple.com/itc/podcasts_connect/#/itcbaf351599
+     */
+    itunes?: {
+        author?: string;
+        categories?: string[];
+        explicit?: boolean;
+        image?: string;
+        keywords?: string;
+        type?: string;
+    };
     extra: Record<string, any>;
 }
 
@@ -80,6 +93,16 @@ export interface RSSItem extends BaseItem {
     enclosure?: Enclosure;
     /** The item synopsis. */
     description: string;
+    /**
+     * If item is an iTunes podcast, this object will contain fields from the iTunes namespace
+     * @see https://help.apple.com/itc/podcasts_connect/#/itcbaf351599
+     */
+    itunes?: {
+        episode?: number;
+        episodeType?: string;
+        duration?: number;
+        explicit?: boolean;
+    }
     extra: Record<string, any>;
 }
 
@@ -181,4 +204,72 @@ export interface AtomEntry extends BaseItem {
     id: string;
     author: AtomAuthor;
     contributors?: AtomAuthor[];
+}
+
+/**
+ * Represents a JSON Feed
+ * @see https://jsonfeed.org/version/1.1
+ */
+export interface JSONFeed extends BaseChannel {
+    /**
+     * URL of the version of the JSON Feed format the feed uses.
+     */
+    version: string;
+    items: JSONFeedItem[];
+    /**
+     * URL of the resource the feed describes.
+     */
+    home_page_url?: string;
+    /**
+     * URL of the feed.
+     */
+    feed_url?: string;
+    /**
+     * URL of a feed that provides the next n items.
+     */
+    next_url?: string;
+    /**
+     * URL of an image for the feed suitable to be used in a timeline.
+     */
+    icon?: string;
+
+    favicon?: string;
+    /**
+     *  Authors of the feed. Populated even in Version 1.0, where the "author" field is a single object, for consistency. In Version 1.0, if the "author" field is present, it will be converted to an array with one element.
+     */
+    authors?: JSONFeedAuthor[];
+    /** Primary language for the feed in the format specified in RFC 5646. The value is usually a 2-letter language tag from ISO 639-1, optionally followed by a region tag. (Examples: en or en-US.) */
+    language?: string;
+    /** Whether or not a feed will ever update again. */
+    expired?: boolean;
+}
+
+interface JSONFeedAuthor {
+    name: string;
+    url?: string;
+    avatar?: string;
+}
+
+interface JSONFeedItem extends BaseItem {
+    id: string;
+    content_text?: string;
+    content_html?: string;
+    url?: string;
+    external_url?: string;
+    summary?: string;
+    image?: string;
+    banner_image?: string;
+    date_published?: Date;
+    date_modified?: Date;
+    authors?: JSONFeedAuthor[];
+    tags?: string[];
+    attachments?: JSONFeedAttachment[];
+}
+
+interface JSONFeedAttachment {
+    url: string;
+    mime_type: string;
+    title?: string;
+    size_in_bytes?: number;
+    duration_in_seconds?: number;
 }

@@ -38,7 +38,7 @@ export function parseRSS(rssString: string): RSSChannel | AtomFeed {
         managingEditor: channelRaw.managingEditor ? (getAuthorInfo(channelRaw.managingEditor) as RSSAuthor) : undefined,
         webMaster: channelRaw.webMaster ? (getAuthorInfo(channelRaw.webMaster) as RSSAuthor) : undefined,
         items: items,
-        extra: {}
+        extra: processNamespaces(channelRaw)
     };
 
     const itunes = processChannelItunes(channelRaw);
@@ -170,7 +170,7 @@ function mapItem(itemRaw: any): RSSItem {
             length: parseInt(itemRaw.enclosure['@_length'], 10),
             type: itemRaw.enclosure['@_type']
         } : undefined,
-        extra: {}
+        extra: processNamespaces(itemRaw)
     };
 
     const itunes = processItemItunes(itemRaw);
@@ -304,4 +304,89 @@ function processItemItunes(itemRaw: any) {
         return itunesFields;
     }
     return undefined;
+}
+
+function processNamespaces(obj: any): any {
+    const extra: any = {};
+    
+    const processNode = (node: any, currentNs: string): any => {
+        if (node === null || node === undefined) return node;
+        if (Array.isArray(node)) return node.map(n => processNode(n, currentNs));
+        if (typeof node !== 'object') return String(node);
+        
+        const attributes: any = {};
+        const children: any = {};
+        let hasAttrs = false;
+        let hasChildren = false;
+
+        for (const k in node) {
+            if (k.startsWith('@_')) {
+                attributes[k.substring(2)] = String(node[k]);
+                hasAttrs = true;
+            } else if (k === '#text') {
+                // Ignore mixed text or keep if needed
+            } else {
+                hasChildren = true;
+                const childNsMatch = k.indexOf(':');
+                let childNs = currentNs;
+                let childProp = k;
+                if (childNsMatch > 0) {
+                    childNs = k.substring(0, childNsMatch);
+                    childProp = k.substring(childNsMatch + 1);
+                }
+                
+                const processedChild = processNode(node[k], childNs);
+                
+                if (childNs === currentNs) {
+                    children[childProp] = processedChild;
+                } else {
+                    if (!children[childNs]) children[childNs] = {};
+                    children[childNs][childProp] = processedChild;
+                }
+            }
+        }
+
+        if (hasAttrs && hasChildren) {
+            return { ...attributes, children };
+        } else if (hasAttrs && !hasChildren) {
+            if (node['#text']) return { ...attributes, text: String(node['#text']) };
+            return attributes;
+        } else if (!hasAttrs && hasChildren) {
+            return children;
+        } else {
+            return String(node['#text'] || '');
+        }
+    };
+
+    const extractAndProcess = (node: any) => {
+        if (!node || typeof node !== 'object') return;
+        
+        for (const k in node) {
+            if (k.includes(':') && !k.startsWith('@_')) {
+                const [ns, prop] = k.split(/:(.+)/);
+                if (!extra[ns]) extra[ns] = {};
+                
+                const processed = processNode(node[k], ns);
+                
+                if (extra[ns][prop]) {
+                    if (Array.isArray(extra[ns][prop])) {
+                        extra[ns][prop].push(processed);
+                    } else {
+                        extra[ns][prop] = [extra[ns][prop], processed];
+                    }
+                } else {
+                    extra[ns][prop] = processed;
+                }
+            }
+            
+            if (Array.isArray(node[k])) {
+                node[k].forEach(extractAndProcess);
+            } else if (typeof node[k] === 'object') {
+                extractAndProcess(node[k]);
+            }
+        }
+    };
+
+    extractAndProcess(obj);
+    return extra;
 }

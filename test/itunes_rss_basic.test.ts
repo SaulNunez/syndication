@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseRSS } from "../src/index.js";
+import { parseFeed } from "../src/index.js";
 import { RSSChannel } from "../src/types";
 
 const example = `
@@ -201,7 +201,7 @@ const example = `
 
 describe('Parsing iTunes RSS Feed information', () => {
   it('Test feed', () => {
-    const rss = parseRSS(example) as RSSChannel;
+    const rss = parseFeed(example) as RSSChannel;
     expect(rss.title).to.equal('Hiking Treks');
     expect(rss.link).to.equal('https://www.apple.com/itunes/podcasts/');
     expect(rss.language).to.equal('en-us');
@@ -217,7 +217,7 @@ describe('Parsing iTunes RSS Feed information', () => {
   });
 
   it('Parsing iTunes RSS item information', () => {
-    const rss = parseRSS(example) as RSSChannel;
+    const rss = parseFeed(example) as RSSChannel;
     const item = rss.items[0];
     expect(item.itunes?.title).to.equal('Hiking Treks Trailer');
     expect(item.itunes?.episodeType).to.equal('trailer');
@@ -226,7 +226,7 @@ describe('Parsing iTunes RSS Feed information', () => {
   });
 
   it('Parsing iTunes RSS item information - episode and season', () => {
-    const rss = parseRSS(example) as RSSChannel;
+    const rss = parseFeed(example) as RSSChannel;
     const item = rss.items[1];
     expect(item.itunes?.episodeType).to.equal('full');
     expect(item.itunes?.episode).to.equal(4);

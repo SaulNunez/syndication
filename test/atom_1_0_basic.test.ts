@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseRSS } from "../src/index.js";
+import { parseFeed } from "../src/index.js";
 import { AtomFeed } from "../src/types";
 
 const sample = `
@@ -51,33 +51,33 @@ const sample = `
 `;
 
 describe('Parsing Atom 1.0 Feed information', () => {
-    it('Test feed', () => {
-        const atom = parseRSS(sample) as AtomFeed;
-        expect(atom.title).to.equal('dive into mark');
-        expect(atom.subtitle).to.equal('A <em>lot</em> of effort went into making this effortless');
-        expect(atom.updated).to.equal('2005-07-31T12:29:29Z');
-        expect(atom.id).to.equal('tag:example.org,2003:3');
-        expect(atom.link).to.equal('http://example.org/');
-        expect(atom.rights).to.equal('Copyright (c) 2003, Mark Pilgrim');
-        expect(atom.generator).to.equal('Example Toolkit');
-    });
+  it('Test feed', () => {
+    const atom = parseFeed(sample) as AtomFeed;
+    expect(atom.title).to.equal('dive into mark');
+    expect(atom.subtitle).to.equal('A <em>lot</em> of effort went into making this effortless');
+    expect(atom.updated).to.equal('2005-07-31T12:29:29Z');
+    expect(atom.id).to.equal('tag:example.org,2003:3');
+    expect(atom.link).to.equal('http://example.org/');
+    expect(atom.rights).to.equal('Copyright (c) 2003, Mark Pilgrim');
+    expect(atom.generator).to.equal('Example Toolkit');
+  });
 });
 
 describe('Parsing Atom 1.0 Entry information', () => {
-    it('Test entry', () => {
-        const atom = parseRSS(sample) as AtomFeed;
-        const entry = atom.items[0];
-        expect(entry.title).to.equal('Atom draft-07 snapshot');
-        expect(entry.link).to.equal('http://example.org/2005/04/02/atom');
-        expect(entry.id).to.equal('tag:example.org,2003:3.2397');
-        expect(entry.updated).to.equal('2005-07-31T12:29:29Z');
-        expect(entry.published).to.equal('2003-12-13T08:29:29-04:00');
-        expect(entry.author.name).to.equal('Mark Pilgrim');
-        expect(entry.author.uri).to.equal('http://example.org/');
-        expect(entry.author.email).to.equal('f8dy@example.com');
-        expect(entry.contributors).to.have.lengthOf(2);
-        expect(entry.contributors?.[0].name).to.equal('Sam Ruby');
-        expect(entry.contributors?.[1].name).to.equal('Joe Gregorio');
-        expect(entry.content?.value).to.equal('<div xmlns="http://www.w3.org/1999/xhtml"><p><i>[Update: The Atom draft is finished.]</i></p></div>');
-    });
+  it('Test entry', () => {
+    const atom = parseFeed(sample) as AtomFeed;
+    const entry = atom.items[0];
+    expect(entry.title).to.equal('Atom draft-07 snapshot');
+    expect(entry.link).to.equal('http://example.org/2005/04/02/atom');
+    expect(entry.id).to.equal('tag:example.org,2003:3.2397');
+    expect(entry.updated).to.equal('2005-07-31T12:29:29Z');
+    expect(entry.published).to.equal('2003-12-13T08:29:29-04:00');
+    expect(entry.author.name).to.equal('Mark Pilgrim');
+    expect(entry.author.uri).to.equal('http://example.org/');
+    expect(entry.author.email).to.equal('f8dy@example.com');
+    expect(entry.contributors).to.have.lengthOf(2);
+    expect(entry.contributors?.[0].name).to.equal('Sam Ruby');
+    expect(entry.contributors?.[1].name).to.equal('Joe Gregorio');
+    expect(entry.content?.value).to.equal('<div xmlns="http://www.w3.org/1999/xhtml"><p><i>[Update: The Atom draft is finished.]</i></p></div>');
+  });
 });

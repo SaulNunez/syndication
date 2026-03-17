@@ -32,7 +32,7 @@ console.log(entry.itunes?.season);
 It supports processing additional fields in RSS feeds.
 
 ```typescript
-const atom = parseRSS(sample) as AtomFeed;
+const atom = parseFeed(sample) as AtomFeed;
 console.log(atom.extra);
 
 const entry = atom.items[0];
@@ -41,7 +41,7 @@ console.log(entry.extra);
 If you know your feed has a specific namespace, like `atom`, you can access that property using the extra property in the object. Inside the extra property, the namespaces are stored as keys, and the values are the values of the properties in the namespace.
 
 ```typescript
-const rss = parseRSS(sample) as RSSFeed;
+const rss = parseFeed(sample) as RSSFeed;
 console.log(rss.extra?.atom?.title);
 ```
 

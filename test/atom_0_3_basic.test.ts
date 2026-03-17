@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseRSS } from "../src/index.js";
+import { parseFeed } from "../src/index.js";
 import { AtomFeed } from "../src/types";
 
 const example = `
@@ -74,7 +74,7 @@ xml:lang="en-US">
 
 describe('Parsing Atom 0.3 Feed information', () => {
     it('Test feed', () => {
-        const atom = parseRSS(example) as AtomFeed;
+        const atom = parseFeed(example) as AtomFeed;
         expect(atom.title).to.equal('Sample Feed');
         expect(atom.subtitle).to.equal('For documentation <em>only</em>');
         expect(atom.link).to.equal('http://example.org/');
@@ -87,7 +87,7 @@ describe('Parsing Atom 0.3 Feed information', () => {
 
 describe('Parsing Atom 0.3 Entry information', () => {
     it('Test entry', () => {
-        const atom = parseRSS(example) as AtomFeed;
+        const atom = parseFeed(example) as AtomFeed;
         const entry = atom.items[0];
         expect(entry.title).to.equal('First entry title');
         expect(entry.link).to.equal('http://example.org/entry/3');

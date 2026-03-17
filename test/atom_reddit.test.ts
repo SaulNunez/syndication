@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseRSS } from "../src/index.js";
+import { parseFeed } from "../src/index.js";
 import { AtomFeed } from "../src/types";
 
 const sample_programming_subreddit = `
@@ -35,7 +35,7 @@ const unescaped_content = `<!-- SC_OFF --><div class="md"><p>tl;dr: mods applica
 
 describe('Parsing Atom feed', () => {
     it('Test Reddit Atom feed gets parsed correctly', () => {
-        const feed = parseRSS(sample_programming_subreddit) as AtomFeed;
+        const feed = parseFeed(sample_programming_subreddit) as AtomFeed;
         expect(feed.title).to.equal('programming');
         expect(feed.link).to.equal('https://www.reddit.com/r/programming/');
         expect(feed.subtitle).to.equal('Computer Programming');
@@ -43,7 +43,7 @@ describe('Parsing Atom feed', () => {
     });
 
     it('Test Reddit entry gets parsed correctly', () => {
-        const feed = parseRSS(sample_programming_subreddit) as AtomFeed;
+        const feed = parseFeed(sample_programming_subreddit) as AtomFeed;
         expect(feed.items.length).to.equal(1);
         const entry = feed.items[0];
         expect(entry.title).to.equal('State of the Subreddit (January 2027): Mods applications and rules updates');

@@ -6,7 +6,7 @@ const builder = new XMLBuilder({
     attributeNamePrefix: "@_"
 });
 
-export function parseRSS(rssString: string): RSSChannel | AtomFeed {
+export function parseFeed(rssString: string): RSSChannel | AtomFeed {
     const parser = new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: "@_",
@@ -233,7 +233,7 @@ function parseItunesDuration(durationRaw: any): number | undefined {
     if (typeof durationRaw === 'number') return durationRaw;
     const parts = String(durationRaw).split(':').map(Number);
     if (parts.some(isNaN)) return undefined;
-    
+
     if (parts.length === 3) {
         return parts[0] * 3600 + parts[1] * 60 + parts[2];
     } else if (parts.length === 2) {
@@ -310,12 +310,12 @@ function processItemItunes(itemRaw: any) {
 
 function processNamespaces(obj: any): any {
     const extra: any = {};
-    
+
     const processNode = (node: any, currentNs: string): any => {
         if (node === null || node === undefined) return node;
         if (Array.isArray(node)) return node.map(n => processNode(n, currentNs));
         if (typeof node !== 'object') return String(node);
-        
+
         const attributes: any = {};
         const children: any = {};
         let hasAttrs = false;
@@ -336,9 +336,9 @@ function processNamespaces(obj: any): any {
                     childNs = k.substring(0, childNsMatch);
                     childProp = k.substring(childNsMatch + 1);
                 }
-                
+
                 const processedChild = processNode(node[k], childNs);
-                
+
                 if (childNs === currentNs) {
                     children[childProp] = processedChild;
                 } else {
@@ -362,14 +362,14 @@ function processNamespaces(obj: any): any {
 
     const extractAndProcess = (node: any) => {
         if (!node || typeof node !== 'object') return;
-        
+
         for (const k in node) {
             if (k.includes(':') && !k.startsWith('@_')) {
                 const [ns, prop] = k.split(/:(.+)/);
                 if (!extra[ns]) extra[ns] = {};
-                
+
                 const processed = processNode(node[k], ns);
-                
+
                 if (extra[ns][prop]) {
                     if (Array.isArray(extra[ns][prop])) {
                         extra[ns][prop].push(processed);
@@ -380,7 +380,7 @@ function processNamespaces(obj: any): any {
                     extra[ns][prop] = processed;
                 }
             }
-            
+
             if (Array.isArray(node[k])) {
                 node[k].forEach(extractAndProcess);
             } else if (typeof node[k] === 'object') {

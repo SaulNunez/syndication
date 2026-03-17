@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseRSS } from "../src/index.js";
+import { parseFeed } from "../src/index.js";
 import { RSSChannel } from "../src/types";
 
 const example = `
@@ -161,7 +161,7 @@ const example = `
 
 describe("Microsoft Start Slideshow feed", () => {
     it("Can load namespaced elements", () => {
-        const feed = parseRSS(example) as RSSChannel;
+        const feed = parseFeed(example) as RSSChannel;
         const item = feed.items[0];
         expect(item.extra["dc"]["creator"]).to.equal("Joe Gargery");
         expect(item.extra["media"]["keywords"]).to.equal("keyword1,keyword2,keyword3");

@@ -224,4 +224,14 @@ describe('Parsing iTunes RSS Feed information', () => {
     expect(item.itunes?.duration).to.equal(1079);
     expect(item.itunes?.explicit).to.equal(false);
   });
+
+  it('Parsing iTunes RSS item information - episode and season', () => {
+    const rss = parseRSS(example) as RSSChannel;
+    const item = rss.items[1];
+    expect(item.itunes?.episodeType).to.equal('full');
+    expect(item.itunes?.episode).to.equal(4);
+    expect(item.itunes?.season).to.equal(2);
+    expect(item.itunes?.duration).to.equal(1024);
+    expect(item.itunes?.explicit).to.equal(false);
+  });
 });

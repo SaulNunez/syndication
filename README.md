@@ -8,6 +8,7 @@ Syndication is a library for parsing RSS and Atom feeds into Javascript objects 
 Current supported protocols:
 - RSS 2.0
 - Atom (0.3, 1.0, 1.1)
+- JSON Feed (1.0, 1.1)
 
 ## Usage
 

@@ -1,12 +1,22 @@
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
-import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory } from "./types.js";
+import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory, JSONFeed } from "./types.js";
 
 const builder = new XMLBuilder({
     ignoreAttributes: false,
     attributeNamePrefix: "@_"
 });
 
-export function parseFeed(rssString: string): RSSChannel | AtomFeed {
+export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
+    // Attempt to parse as JSON first
+    try {
+        const parsedJson = JSON.parse(rssString);
+        if (parsedJson && parsedJson.version && typeof parsedJson.version === 'string' && parsedJson.version.includes("https://jsonfeed.org/version/")) {
+            return parseJSONFeed(parsedJson);
+        }
+    } catch (e) {
+        // Not JSON, continue to XML parsing
+    }
+
     const parser = new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: "@_",
@@ -69,6 +79,44 @@ function parseAtom(feedRaw: any): AtomFeed {
         items: entries,
         description: getTypeContent(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
         extra: processNamespaces(feedRaw)
+    };
+}
+
+function parseJSONFeed(feedRaw: any): JSONFeed {
+    return {
+        version: feedRaw.version,
+        title: feedRaw.title,
+        link: feedRaw.home_page_url || "", // Map home_page_url to link for BaseChannel compatibility
+        description: feedRaw.description,
+        home_page_url: feedRaw.home_page_url,
+        feed_url: feedRaw.feed_url,
+        next_url: feedRaw.next_url,
+        icon: feedRaw.icon,
+        favicon: feedRaw.favicon,
+        authors: feedRaw.authors || (feedRaw.author ? [feedRaw.author] : undefined), //Adding compatibility with 1.0 JSON Feed
+        language: feedRaw.language,
+        expired: feedRaw.expired,
+        items: Array.isArray(feedRaw.items) ? feedRaw.items.map(mapJSONFeedItem) : [],
+    };
+}
+
+function mapJSONFeedItem(itemRaw: any): any {
+    return {
+        id: itemRaw.id,
+        title: itemRaw.title || "", // BaseItem compatibility
+        link: itemRaw.url || "", // BaseItem compatibility
+        content_text: itemRaw.content_text,
+        content_html: itemRaw.content_html,
+        url: itemRaw.url,
+        external_url: itemRaw.external_url,
+        summary: itemRaw.summary,
+        image: itemRaw.image,
+        banner_image: itemRaw.banner_image,
+        date_published: itemRaw.date_published,
+        date_modified: itemRaw.date_modified,
+        authors: itemRaw.authors || (itemRaw.author ? [itemRaw.author] : undefined),
+        tags: itemRaw.tags,
+        attachments: itemRaw.attachments,
     };
 }
 

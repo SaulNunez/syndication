@@ -215,4 +215,13 @@ describe('Parsing iTunes RSS Feed information', () => {
     expect(rss.itunes?.categories).to.deep.equal(['Sports', 'Wilderness']);
     expect(rss.itunes?.explicit).to.equal(false);
   });
+
+  it('Parsing iTunes RSS item information', () => {
+    const rss = parseRSS(example) as RSSChannel;
+    const item = rss.items[0];
+    expect(item.itunes?.title).to.equal('Hiking Treks Trailer');
+    expect(item.itunes?.episodeType).to.equal('trailer');
+    expect(item.itunes?.duration).to.equal(1079);
+    expect(item.itunes?.explicit).to.equal(false);
+  });
 });

@@ -288,6 +288,8 @@ function processChannelItunes(channelRaw: any) {
 
 function processItemItunes(itemRaw: any) {
     const itunesFields: any = {
+        title: itemRaw['itunes:title'],
+        season: parseItunesEpisode(itemRaw['itunes:season']),
         episode: parseItunesEpisode(itemRaw['itunes:episode']),
         episodeType: itemRaw['itunes:episodeType'],
         duration: parseItunesDuration(itemRaw['itunes:duration']),

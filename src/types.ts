@@ -102,6 +102,8 @@ export interface RSSItem extends BaseItem {
         episodeType?: string;
         duration?: number;
         explicit?: boolean;
+        season?: number;
+        title?: string;
     }
     extra: Record<string, any>;
 }

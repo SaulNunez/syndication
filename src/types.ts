@@ -20,6 +20,7 @@ interface BaseItem {
  * @see https://www.rssboard.org/rss-2-0#channel
  */
 export interface RSSChannel extends BaseChannel {
+    feedType: "rss";
     /** The language the channel is written in. */
     language?: string;
     /** The publication date for the content in the channel. */
@@ -151,6 +152,7 @@ export interface AtomAuthor {
  * @see https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
  */
 interface AtomSource extends BaseChannel {
+    feedType: "atom";
     /** The author of the feed. */
     author?: AtomAuthor;
     /** Categories associated with the feed. */
@@ -213,6 +215,7 @@ export interface AtomEntry extends BaseItem {
  * @see https://jsonfeed.org/version/1.1
  */
 export interface JSONFeed extends BaseChannel {
+    feedType: "json";
     /**
      * URL of the version of the JSON Feed format the feed uses.
      */

@@ -35,6 +35,7 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
         : (channelRaw.item ? [mapItem(channelRaw.item)] : []);
 
     const channel: RSSChannel = {
+        feedType: "rss",
         title: channelRaw.title,
         link: channelRaw.link,
         description: channelRaw.description,
@@ -66,6 +67,7 @@ function parseAtom(feedRaw: any): AtomFeed {
         : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl)] : []);
 
     return {
+        feedType: "atom",
         id: feedRaw.id,
         title: getTypeContent(feedRaw.title),
         updated: feedRaw.updated || feedRaw.modified,
@@ -84,6 +86,7 @@ function parseAtom(feedRaw: any): AtomFeed {
 
 function parseJSONFeed(feedRaw: any): JSONFeed {
     return {
+        feedType: "json",
         version: feedRaw.version,
         title: feedRaw.title,
         link: feedRaw.home_page_url || "", // Map home_page_url to link for BaseChannel compatibility

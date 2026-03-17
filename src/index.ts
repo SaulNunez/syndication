@@ -68,7 +68,7 @@ function parseAtom(feedRaw: any): AtomFeed {
         icon: feedRaw.icon,
         items: entries,
         description: getTypeContent(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
-        extra: {}
+        extra: processNamespaces(feedRaw)
     };
 }
 
@@ -95,7 +95,7 @@ function mapAtomEntry(entryRaw: any, feedBaseUrl?: string): AtomEntry {
         } : undefined,
         author: entryRaw.author ? getAtomAuthor(entryRaw.author) : { name: "" },
         contributors: entryRaw.contributor ? (Array.isArray(entryRaw.contributor) ? entryRaw.contributor.map(getAtomAuthor) : [getAtomAuthor(entryRaw.contributor)]) : undefined,
-        extra: {}
+        extra: processNamespaces(entryRaw)
     };
 }
 

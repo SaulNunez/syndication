@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "test": "mocha --no-warnings --loader=ts-node/esm 'test/**/*.test.ts'",
+    "test": "npx tsx node_modules/mocha/bin/mocha.js 'test/**/*.test.ts'",
     "build": "tsup"
   },
   "keywords": [],
@@ -34,6 +34,7 @@
     "mocha": "^11.7.5",
     "ts-mocha": "^11.1.0",
     "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {

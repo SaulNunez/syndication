@@ -20,7 +20,7 @@ It supports processing iTunes podcast feeds.
 For accesing propierties in the iTunes namespace, you can use the `itunes` property.
 
 ```typescript
-const rss = parseRSS(sample) as RSSFeed;
+const rss = parseFeed(sample) as RSSFeed;
 console.log(rss.itunes?.image);
 
 const entry = rss.items[0];

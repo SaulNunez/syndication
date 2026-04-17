@@ -20,7 +20,8 @@
   },
   "scripts": {
     "test": "npx tsx node_modules/mocha/bin/mocha.js 'test/**/*.test.ts'",
-    "build": "tsup"
+    "build": "tsup",
+    "prepare": "npm run build"
   },
   "keywords": [],
   "author": "",

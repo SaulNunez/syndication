@@ -22,10 +22,20 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
         attributeNamePrefix: "@_",
         textNodeName: "#text"
     });
-    const parsed = parser.parse(rssString);
+
+    let parsed: any;
+    try {
+        parsed = parser.parse(rssString);
+    } catch (e) {
+        throw new Error(`Failed to parse feed: input is not valid XML (${e instanceof Error ? e.message : String(e)})`);
+    }
 
     if (parsed.feed) {
         return parseAtom(parsed.feed);
+    }
+
+    if (!parsed.rss || !parsed.rss.channel) {
+        throw new Error("Failed to parse feed: input is not a recognized RSS or Atom feed");
     }
 
     const channelRaw = parsed.rss.channel;

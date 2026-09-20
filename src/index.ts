@@ -1,5 +1,5 @@
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
-import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory, JSONFeed } from "./types.js";
+import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory, AtomSource, JSONFeed } from "./types.js";
 
 const builder = new XMLBuilder({
     ignoreAttributes: false,
@@ -20,7 +20,10 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
     const parser = new XMLParser({
         ignoreAttributes: false,
         attributeNamePrefix: "@_",
-        textNodeName: "#text"
+        textNodeName: "#text",
+        // Keep <content> as raw inner XML: rebuilding it from the parsed object
+        // form loses sibling order and the position of text among inline elements.
+        stopNodes: ["*.content"]
     });
 
     let parsed: any;
@@ -54,12 +57,14 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
         lastBuildDate: channelRaw.lastBuildDate,
         docs: channelRaw.docs,
         generator: channelRaw.generator,
-        ttl: channelRaw.ttl || 60,
+        ttl: parseTtl(channelRaw.ttl),
         copyright: channelRaw.copyright,
         managingEditor: channelRaw.managingEditor ? (getAuthorInfo(channelRaw.managingEditor) as RSSAuthor) : undefined,
         webMaster: channelRaw.webMaster ? (getAuthorInfo(channelRaw.webMaster) as RSSAuthor) : undefined,
+        image: mapChannelImage(channelRaw.image),
         items: items,
-        extra: processNamespaces(channelRaw)
+        // <item> is excluded so an item's namespaces stay on the item.
+        extra: processNamespaces(channelRaw, ["item"])
     };
 
     const itunes = processChannelItunes(channelRaw);
@@ -72,9 +77,11 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
 
 function parseAtom(feedRaw: any): AtomFeed {
     const feedBaseUrl = feedRaw["@_xml:base"];
+    // RFC 4287 4.2.1: an entry with no author of its own inherits the feed's.
+    const feedAuthor = feedRaw.author ? getAtomAuthor(feedRaw.author) : undefined;
     const entries: AtomEntry[] = Array.isArray(feedRaw.entry)
-        ? feedRaw.entry.map((entry: any) => mapAtomEntry(entry, feedBaseUrl))
-        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl)] : []);
+        ? feedRaw.entry.map((entry: any) => mapAtomEntry(entry, feedBaseUrl, feedAuthor))
+        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl, feedAuthor)] : []);
 
     return {
         feedType: "atom",
@@ -85,12 +92,14 @@ function parseAtom(feedRaw: any): AtomFeed {
         subtitle: getTypeContent(feedRaw.subtitle || feedRaw.tagline),
         rights: feedRaw.rights ? getTypeContent(feedRaw.rights) : (feedRaw.copyright ? getTypeContent(feedRaw.copyright) : undefined),
         generator: getTypeContent(feedRaw.generator),
-        author: feedRaw.author ? getAtomAuthor(feedRaw.author) : undefined,
+        author: feedAuthor,
+        category: getAtomCategory(feedRaw.category),
         logo: feedRaw.logo,
         icon: feedRaw.icon,
         items: entries,
         description: getTypeContent(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
-        extra: processNamespaces(feedRaw)
+        // <entry> is excluded so an entry's namespaces stay on the entry.
+        extra: processNamespaces(feedRaw, ["entry"])
     };
 }
 
@@ -133,11 +142,11 @@ function mapJSONFeedItem(itemRaw: any): any {
     };
 }
 
-function mapAtomEntry(entryRaw: any, feedBaseUrl?: string): AtomEntry {
+function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthor?: AtomAuthor): AtomEntry {
     const entryBaseUrl = entryRaw["@_xml:base"] || feedBaseUrl;
     const contentRaw = entryRaw.content;
     const contentType = contentRaw ? contentRaw["@_type"] : undefined;
-    let contentValue = contentRaw ? getContentValue(contentRaw) : undefined;
+    let contentValue = contentRaw ? getContentValue(contentRaw, contentType) : undefined;
 
     if (contentType === 'html' && contentValue) {
         contentValue = decodeHtmlEntities(contentValue);
@@ -154,15 +163,31 @@ function mapAtomEntry(entryRaw: any, feedBaseUrl?: string): AtomEntry {
             type: contentType,
             value: contentValue
         } : undefined,
-        author: entryRaw.author ? getAtomAuthor(entryRaw.author) : { name: "" },
+        author: entryRaw.author ? getAtomAuthor(entryRaw.author) : (feedAuthor || { name: "" }),
         contributors: entryRaw.contributor ? (Array.isArray(entryRaw.contributor) ? entryRaw.contributor.map(getAtomAuthor) : [getAtomAuthor(entryRaw.contributor)]) : undefined,
+        category: getAtomCategory(entryRaw.category),
+        source: getAtomSource(entryRaw.source),
         extra: processNamespaces(entryRaw)
     };
 }
 
-function getContentValue(contentRaw: any): string {
-    if (typeof contentRaw === "string") return contentRaw;
-    if (contentRaw["#text"]) return contentRaw["#text"];
+/** True for the Atom text-construct types whose payload is markup, not escaped text. */
+function isMarkupConstruct(contentType?: string): boolean {
+    return typeof contentType === "string" && (contentType === "xhtml" || contentType.includes("xml"));
+}
+
+function getContentValue(contentRaw: any, contentType?: string): string {
+    if (typeof contentRaw === "string") return decodeHtmlEntities(contentRaw);
+
+    if (contentRaw["#text"] !== undefined && contentRaw["#text"] !== null) {
+        // fast-xml-parser trims ordinary text nodes but not stop nodes, so the
+        // indentation around the element has to be dropped here to match.
+        const text = String(contentRaw["#text"]).trim();
+        // Markup constructs keep their entities, which belong to the markup. For
+        // escaped types the raw text still carries the XML-level entities that
+        // fast-xml-parser would have resolved had this not been a stop node.
+        return isMarkupConstruct(contentType) ? text : decodeHtmlEntities(text);
+    }
 
     // If it's an object with other keys (like children), we might need to serialize it back
     // However, fast-xml-parser puts attributes in keys starting with @_.
@@ -183,10 +208,48 @@ function getContentValue(contentRaw: any): string {
 }
 
 function getAtomAuthor(authorRaw: any): AtomAuthor {
+    // Atom permits several <author> elements; the declared type holds one, so
+    // take the first rather than reading fields off the array.
+    const raw = Array.isArray(authorRaw) ? authorRaw[0] : authorRaw;
     return {
-        name: authorRaw.name,
-        email: authorRaw.email,
-        uri: authorRaw.uri || authorRaw.url
+        name: raw.name,
+        email: raw.email,
+        uri: raw.uri || raw.url
+    };
+}
+
+/** Reads the first <category>; its data lives entirely in attributes. */
+function getAtomCategory(categoryRaw: any): AtomCategory | undefined {
+    if (!categoryRaw) return undefined;
+    const raw = Array.isArray(categoryRaw) ? categoryRaw[0] : categoryRaw;
+    if (!raw || raw["@_term"] === undefined) return undefined;
+
+    const category: AtomCategory = { term: String(raw["@_term"]) };
+    if (raw["@_scheme"] !== undefined) category.scheme = String(raw["@_scheme"]);
+    if (raw["@_label"] !== undefined) category.label = String(raw["@_label"]);
+    return category;
+}
+
+/** An entry's <source> preserves metadata from the feed it was copied out of. */
+function getAtomSource(sourceRaw: any): AtomSource | undefined {
+    if (!sourceRaw) return undefined;
+    const raw = Array.isArray(sourceRaw) ? sourceRaw[0] : sourceRaw;
+
+    const subtitle = getTypeContent(raw.subtitle || raw.tagline);
+    return {
+        feedType: "atom",
+        id: raw.id,
+        title: getTypeContent(raw.title),
+        link: getLinkHref(raw.link),
+        updated: raw.updated || raw.modified,
+        subtitle: subtitle,
+        description: subtitle,
+        rights: raw.rights ? getTypeContent(raw.rights) : (raw.copyright ? getTypeContent(raw.copyright) : undefined),
+        generator: getTypeContent(raw.generator),
+        author: raw.author ? getAtomAuthor(raw.author) : undefined,
+        category: getAtomCategory(raw.category),
+        logo: raw.logo,
+        icon: raw.icon
     };
 }
 
@@ -210,9 +273,17 @@ function resolveUrl(url: string | undefined, baseUrl: string | undefined): strin
 }
 
 function getTypeContent(contentRaw: any): string {
+    // A repeated element arrives as an array; the declared types hold one value.
+    if (Array.isArray(contentRaw)) return getTypeContent(contentRaw[0]);
+
     let text = "";
     if (typeof contentRaw === "object" && contentRaw !== null) {
         text = contentRaw["#text"] || "";
+        // A type="xhtml" text construct carries child elements instead of text,
+        // so fall back to the serialized children rather than dropping it.
+        if (!text) {
+            text = getContentValue(contentRaw) || "";
+        }
     } else {
         text = contentRaw || "";
     }
@@ -220,16 +291,21 @@ function getTypeContent(contentRaw: any): string {
 }
 
 function mapItem(itemRaw: any): RSSItem {
+    // RSS allows several enclosures per item in the wild; keep the first.
+    const enclosureRaw = Array.isArray(itemRaw.enclosure) ? itemRaw.enclosure[0] : itemRaw.enclosure;
+
     const item: RSSItem = {
         title: itemRaw.title,
         link: itemRaw.link,
         description: itemRaw.description,
+        author: itemRaw.author ? (getAuthorInfo(itemRaw.author) as RSSAuthor) : undefined,
+        comments: itemRaw.comments,
         pubDate: itemRaw.pubDate,
         guid: itemRaw.guid ? (typeof itemRaw.guid === 'object' ? itemRaw.guid['#text'] : itemRaw.guid) : undefined,
-        enclosure: itemRaw.enclosure ? {
-            url: itemRaw.enclosure['@_url'],
-            length: parseInt(itemRaw.enclosure['@_length'], 10),
-            type: itemRaw.enclosure['@_type']
+        enclosure: enclosureRaw ? {
+            url: enclosureRaw['@_url'],
+            length: parseEnclosureLength(enclosureRaw['@_length']),
+            type: enclosureRaw['@_type']
         } : undefined,
         extra: processNamespaces(itemRaw)
     };
@@ -240,6 +316,30 @@ function mapItem(itemRaw: any): RSSItem {
     }
 
     return item;
+}
+
+/** `<ttl>` is optional and defaults to 60; a literal 0 is a real value, not an absence. */
+function parseTtl(ttlRaw: any): number {
+    if (ttlRaw === undefined || ttlRaw === null || ttlRaw === "") return 60;
+    const ttl = Number(ttlRaw);
+    return isNaN(ttl) ? 60 : ttl;
+}
+
+/** `length` is required by the spec but routinely omitted; report that as undefined, not NaN. */
+function parseEnclosureLength(lengthRaw: any): number | undefined {
+    if (lengthRaw === undefined || lengthRaw === null || lengthRaw === "") return undefined;
+    const length = Number(lengthRaw);
+    return isNaN(length) ? undefined : length;
+}
+
+function mapChannelImage(imageRaw: any): RSSChannel["image"] {
+    if (!imageRaw) return undefined;
+    const raw = Array.isArray(imageRaw) ? imageRaw[0] : imageRaw;
+    return {
+        url: raw.url,
+        title: raw.title,
+        link: raw.link
+    };
 }
 
 export function getAuthorInfo(authorString: string): RSSAuthor | string {
@@ -369,7 +469,13 @@ function processItemItunes(itemRaw: any) {
     return undefined;
 }
 
-function processNamespaces(obj: any): any {
+/**
+ * Collects every namespaced element below `obj` into a bag keyed by prefix.
+ * `skipKeys` names direct children to leave out entirely -- the channel/feed
+ * passes its item/entry key so that an item's namespaces are not also
+ * attributed to its channel.
+ */
+function processNamespaces(obj: any, skipKeys: string[] = []): any {
     const extra: any = {};
 
     const processNode = (node: any, currentNs: string): any => {
@@ -421,10 +527,12 @@ function processNamespaces(obj: any): any {
         }
     };
 
-    const extractAndProcess = (node: any) => {
+    const extractAndProcess = (node: any, isRoot = false) => {
         if (!node || typeof node !== 'object') return;
 
         for (const k in node) {
+            if (isRoot && skipKeys.includes(k)) continue;
+
             if (k.includes(':') && !k.startsWith('@_')) {
                 const [ns, prop] = k.split(/:(.+)/);
                 if (!extra[ns]) extra[ns] = {};
@@ -443,13 +551,14 @@ function processNamespaces(obj: any): any {
             }
 
             if (Array.isArray(node[k])) {
-                node[k].forEach(extractAndProcess);
+                // Not a bare reference: forEach would pass the index as isRoot.
+                node[k].forEach((child: any) => extractAndProcess(child));
             } else if (typeof node[k] === 'object') {
                 extractAndProcess(node[k]);
             }
         }
     };
 
-    extractAndProcess(obj);
+    extractAndProcess(obj, true);
     return extra;
 }

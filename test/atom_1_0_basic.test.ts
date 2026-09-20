@@ -78,6 +78,10 @@ describe('Parsing Atom 1.0 Entry information', () => {
     expect(entry.contributors).to.have.lengthOf(2);
     expect(entry.contributors?.[0].name).to.equal('Sam Ruby');
     expect(entry.contributors?.[1].name).to.equal('Joe Gregorio');
-    expect(entry.content?.value).to.equal('<div xmlns="http://www.w3.org/1999/xhtml"><p><i>[Update: The Atom draft is finished.]</i></p></div>');
+    // XHTML content is returned as the source markup, so the indentation inside
+    // <content> is preserved; only the whitespace around it is trimmed.
+    expect(entry.content?.value).to.equal(
+      '<div xmlns="http://www.w3.org/1999/xhtml">\n           <p><i>[Update: The Atom draft is finished.]</i></p>\n         </div>'
+    );
   });
 });

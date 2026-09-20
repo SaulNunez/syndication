@@ -150,21 +150,22 @@ describe("RSS namespace extras", () => {
     });
 });
 
-describe("RSS edge cases — known gaps (skipped)", () => {
-    // mapItem never reads itemRaw.author, though RSSItem declares the field.
-    it.skip("populates item.author from <author>", () => {
+describe("RSS author, comments and image", () => {
+    it("parses item.author with the same `email (Name)` convention as the channel", () => {
         const rss = parseFeed(feed("", "<author>jo@example.com (Jo)</author>")) as RSSChannel;
         expect(rss.items[0].author).to.deep.equal({ name: "Jo", email: "jo@example.com" });
     });
 
-    // mapItem never reads itemRaw.comments, though RSSItem declares the field.
-    it.skip("populates item.comments from <comments>", () => {
+    it("leaves item.author undefined when the element is absent", () => {
+        expect((parseFeed(feed()) as RSSChannel).items[0].author).to.equal(undefined);
+    });
+
+    it("carries item.comments through", () => {
         const rss = parseFeed(feed("", "<comments>https://example.com/c</comments>")) as RSSChannel;
         expect(rss.items[0].comments).to.equal("https://example.com/c");
     });
 
-    // The whole <image> block is dropped, though RSSChannel declares `image`.
-    it.skip("populates channel.image from <image>", () => {
+    it("maps the channel <image> block", () => {
         const rss = parseFeed(feed(
             "<image><url>https://example.com/i.png</url><title>IT</title><link>https://example.com/</link></image>"
         )) as RSSChannel;
@@ -175,31 +176,59 @@ describe("RSS edge cases — known gaps (skipped)", () => {
         });
     });
 
-    // `channelRaw.ttl || 60` treats a legitimate 0 as absent.
-    it.skip("keeps ttl of 0 instead of defaulting to 60", () => {
+    it("leaves channel.image undefined when the element is absent", () => {
+        expect((parseFeed(feed()) as RSSChannel).image).to.equal(undefined);
+    });
+});
+
+describe("RSS numeric field normalisation", () => {
+    // 0 is a meaningful ttl ("do not cache"), not an absent one.
+    it("keeps a ttl of 0 rather than falling back to the default", () => {
         expect((parseFeed(feed("<ttl>0</ttl>")) as RSSChannel).ttl).to.equal(0);
     });
 
-    // itemRaw.enclosure is an array when repeated; the mapper indexes it as an
-    // object, producing {url: undefined, length: NaN, type: undefined}.
-    it.skip("takes the first of several enclosures", () => {
-        const rss = parseFeed(feed("",
-            '<enclosure url="https://example.com/a.mp3" length="1" type="audio/mpeg"/>' +
-            '<enclosure url="https://example.com/b.mp3" length="2" type="audio/mpeg"/>'
-        )) as RSSChannel;
-        expect(rss.items[0].enclosure?.url).to.equal("https://example.com/a.mp3");
+    it("falls back to 60 for a non-numeric ttl", () => {
+        expect((parseFeed(feed("<ttl>soon</ttl>")) as RSSChannel).ttl).to.equal(60);
     });
 
-    // parseInt(undefined, 10) is NaN, which survives into the result object.
-    it.skip("leaves enclosure.length undefined when the attribute is missing", () => {
+    // The spec requires length, but plenty of feeds omit it; undefined says
+    // "not stated" where NaN would poison any arithmetic downstream.
+    it("reports a missing enclosure length as undefined", () => {
         const rss = parseFeed(feed("", '<enclosure url="https://example.com/a.mp3" type="audio/mpeg"/>')) as RSSChannel;
         expect(rss.items[0].enclosure?.length).to.equal(undefined);
     });
 
-    // extractAndProcess recurses into descendants, so a namespace used only on an
-    // <item> is also collected into the channel's extra bag.
-    it.skip("does not leak item-level namespaces into channel.extra", () => {
+    it("reports a non-numeric enclosure length as undefined", () => {
+        const rss = parseFeed(feed("", '<enclosure url="https://example.com/a.mp3" length="big" type="audio/mpeg"/>')) as RSSChannel;
+        expect(rss.items[0].enclosure?.length).to.equal(undefined);
+    });
+});
+
+describe("RSS repeated elements", () => {
+    // The declared type holds one enclosure, so a feed carrying several gets the
+    // first rather than a half-populated object built from the array.
+    it("takes the first of several enclosures", () => {
+        const rss = parseFeed(feed("",
+            '<enclosure url="https://example.com/a.mp3" length="1" type="audio/mpeg"/>' +
+            '<enclosure url="https://example.com/b.mp3" length="2" type="audio/mpeg"/>'
+        )) as RSSChannel;
+        expect(rss.items[0].enclosure).to.deep.equal({
+            url: "https://example.com/a.mp3",
+            length: 1,
+            type: "audio/mpeg"
+        });
+    });
+});
+
+describe("RSS namespace containment", () => {
+    it("keeps item-level namespaces out of channel.extra", () => {
         const rss = parseFeed(feed("", "<dc:creator>Jo</dc:creator>")) as RSSChannel;
+        expect(rss.items[0].extra?.dc?.creator).to.equal("Jo");
         expect(Object.keys(rss.extra)).to.not.include("dc");
+    });
+
+    it("still collects channel-level namespaces", () => {
+        const rss = parseFeed(feed("<dc:publisher>Acme</dc:publisher>")) as RSSChannel;
+        expect(rss.extra?.dc?.publisher).to.equal("Acme");
     });
 });

@@ -213,11 +213,125 @@ describe("Atom feed-level scalars", () => {
     });
 });
 
-describe("Atom edge cases — known gaps (skipped)", () => {
-    // getContentValue rebuilds markup from the parser's object form, which keeps
-    // neither the position of text among sibling elements nor the whitespace
-    // around it: "<p>Hi <i>there</i></p>" comes back as "<p><i>there</i>Hi</p>".
-    it.skip("keeps text in place alongside inline elements in XHTML content", () => {
+describe("Atom author selection and inheritance", () => {
+    // Atom permits several <author> elements; the declared type holds one.
+    it("takes the first of several entry authors", () => {
+        const atom = parseFeed(feed(entry(
+            "<author><name>A</name></author><author><name>B</name></author>"
+        ))) as AtomFeed;
+        expect(atom.items[0].author.name).to.equal("A");
+    });
+
+    it("takes the first of several feed authors", () => {
+        const atom = parseFeed(feed(
+            "<author><name>A</name></author><author><name>B</name></author>"
+        )) as AtomFeed;
+        expect(atom.author?.name).to.equal("A");
+    });
+
+    // RFC 4287 section 4.2.1.
+    it("inherits the feed-level author when an entry has none", () => {
+        const atom = parseFeed(feed(
+            "<author><name>Feed Author</name></author>" + entry("")
+        )) as AtomFeed;
+        expect(atom.items[0].author.name).to.equal("Feed Author");
+    });
+
+    it("prefers an entry's own author over the feed's", () => {
+        const atom = parseFeed(feed(
+            "<author><name>Feed Author</name></author>" +
+            entry("<author><name>Entry Author</name></author>")
+        )) as AtomFeed;
+        expect(atom.items[0].author.name).to.equal("Entry Author");
+    });
+
+    it("still falls back to an empty-named author when neither level has one", () => {
+        expect((parseFeed(feed(entry(""))) as AtomFeed).items[0].author).to.deep.equal({ name: "" });
+    });
+});
+
+describe("Atom xhtml text constructs", () => {
+    // A type="xhtml" construct holds child elements rather than text, so the
+    // serialized children stand in for the (absent) text node.
+    it("extracts a type=xhtml title", () => {
+        const xhtmlTitle = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Hello <b>World</b></div></title>
+            <id>tag:example.com,2024:feed</id></feed>`;
+        const atom = parseFeed(xhtmlTitle) as AtomFeed;
+        expect(atom.title).to.contain("Hello");
+        expect(atom.title).to.contain("World");
+    });
+
+    it("extracts a type=xhtml summary", () => {
+        const atom = parseFeed(feed(entry(
+            '<summary type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Summarised</p></div></summary>'
+        ))) as AtomFeed;
+        expect(atom.items[0].summary).to.contain("Summarised");
+    });
+
+    it("leaves a plain text title untouched", () => {
+        const plain = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title type="text">Just text</title><id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(plain) as AtomFeed).title).to.equal("Just text");
+    });
+
+    it("takes the first of a repeated title rather than serializing the array", () => {
+        const repeated = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title>First</title><title>Second</title><id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(repeated) as AtomFeed).title).to.equal("First");
+    });
+});
+
+describe("Atom categories and source", () => {
+    it("maps a feed <category> with all three attributes", () => {
+        const atom = parseFeed(feed(
+            '<category term="tech" scheme="https://example.com/s" label="Tech"/>'
+        )) as AtomFeed;
+        expect(atom.category).to.deep.equal({
+            term: "tech", scheme: "https://example.com/s", label: "Tech"
+        });
+    });
+
+    it("maps an entry <category> with only a term", () => {
+        const atom = parseFeed(feed(entry('<category term="news"/>'))) as AtomFeed;
+        expect(atom.items[0].category).to.deep.equal({ term: "news" });
+    });
+
+    // The declared type holds one category, so a repeated element gets the first.
+    it("takes the first of several categories", () => {
+        const atom = parseFeed(feed(
+            '<category term="one"/><category term="two"/>'
+        )) as AtomFeed;
+        expect(atom.category?.term).to.equal("one");
+    });
+
+    it("leaves category undefined when the element is absent", () => {
+        expect((parseFeed(feed(entry(""))) as AtomFeed).category).to.equal(undefined);
+    });
+
+    it("maps an entry's <source> element", () => {
+        const atom = parseFeed(feed(entry(
+            "<source><id>tag:example.com,2024:src</id><title>Source Feed</title>" +
+            '<link rel="alternate" href="https://source.example.org/"/>' +
+            "<updated>2024-01-01T00:00:00Z</updated></source>"
+        ))) as AtomFeed;
+        const source = atom.items[0].source;
+        expect(source).to.have.property("feedType", "atom");
+        expect(source).to.have.property("title", "Source Feed");
+        expect(source).to.have.property("id", "tag:example.com,2024:src");
+        expect(source).to.have.property("link", "https://source.example.org/");
+        expect(source).to.have.property("updated", "2024-01-01T00:00:00Z");
+    });
+
+    it("leaves source undefined when the element is absent", () => {
+        expect((parseFeed(feed(entry(""))) as AtomFeed).items[0].source).to.equal(undefined);
+    });
+});
+
+describe("Atom content ordering", () => {
+    // <content> is parsed as a stop node, so its inner XML survives verbatim
+    // rather than being rebuilt from an object that has lost document order.
+    it("keeps text in place alongside inline elements", () => {
         const atom = parseFeed(feed(entry(
             '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Hi <i>there</i></p></div></content>'
         ))) as AtomFeed;
@@ -226,9 +340,7 @@ describe("Atom edge cases — known gaps (skipped)", () => {
         );
     });
 
-    // Same root cause: repeated tag names are grouped together on the object, so
-    // "<p>A</p><span>B</span><p>C</p>" re-serializes with both <p>s adjacent.
-    it.skip("keeps document order when sibling element names repeat", () => {
+    it("keeps document order when sibling element names repeat", () => {
         const atom = parseFeed(feed(entry(
             '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>A</p><span>B</span><p>C</p></div></content>'
         ))) as AtomFeed;
@@ -237,52 +349,10 @@ describe("Atom edge cases — known gaps (skipped)", () => {
         );
     });
 
-    // getAtomAuthor receives the array unchanged and reads .name/.email/.uri off
-    // it, so every field comes back undefined.
-    it.skip("takes the first of several entry authors", () => {
+    it("preserves whitespace inside the content markup", () => {
         const atom = parseFeed(feed(entry(
-            "<author><name>A</name></author><author><name>B</name></author>"
+            '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><pre>a  b</pre></div></content>'
         ))) as AtomFeed;
-        expect(atom.items[0].author.name).to.equal("A");
-    });
-
-    // RFC 4287 section 4.2.1: an entry without an author inherits the feed's.
-    it.skip("inherits the feed-level author when an entry has none", () => {
-        const atom = parseFeed(feed(
-            "<author><name>Feed Author</name></author>" + entry("")
-        )) as AtomFeed;
-        expect(atom.items[0].author.name).to.equal("Feed Author");
-    });
-
-    // getTypeContent only reads #text, so a type="xhtml" text construct -- whose
-    // payload is a child <div> -- collapses to "". Compare <content>, which goes
-    // through getContentValue and survives.
-    it.skip("extracts a type=xhtml title instead of yielding an empty string", () => {
-        const atom = parseFeed(feed(
-            '<title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Hello <b>World</b></div></title>'
-        )) as AtomFeed;
-        expect(atom.title).to.contain("Hello");
-    });
-
-    // AtomCategory is exported and AtomSource declares `category`, but parseAtom
-    // never maps it -- and since <category> carries no prefix it is not in `extra`
-    // either, so the data is dropped outright.
-    it.skip("maps feed and entry <category> elements", () => {
-        const atom = parseFeed(feed(
-            '<category term="tech" scheme="https://example.com/s" label="Tech"/>' +
-            entry('<category term="news"/>')
-        )) as AtomFeed;
-        expect(atom.category).to.deep.equal({
-            term: "tech", scheme: "https://example.com/s", label: "Tech"
-        });
-        expect((atom.items[0] as any).category).to.have.property("term", "news");
-    });
-
-    // AtomEntry declares `source`, but mapAtomEntry never populates it.
-    it.skip("maps an entry's <source> element", () => {
-        const atom = parseFeed(feed(entry(
-            "<source><id>tag:example.com,2024:src</id><title>Source Feed</title></source>"
-        ))) as AtomFeed;
-        expect(atom.items[0].source).to.have.property("title", "Source Feed");
+        expect(atom.items[0].content?.value).to.contain("a  b");
     });
 });

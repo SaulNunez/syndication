@@ -71,8 +71,8 @@ export interface RSSAuthor {
 interface Enclosure {
     /** Where the enclosure is located. */
     url: string;
-    /** How big it is in bytes. */
-    length: number;
+    /** How big it is in bytes. Undefined when the feed omits the attribute. */
+    length?: number;
     /** Standard MIME type. */
     type: string;
 }
@@ -151,7 +151,7 @@ export interface AtomAuthor {
  * Base interface for Atom Feed and Source elements.
  * @see https://www.rfc-editor.org/rfc/rfc4287#section-4.1.1
  */
-interface AtomSource extends BaseChannel {
+export interface AtomSource extends BaseChannel {
     feedType: "atom";
     /** The author of the feed. */
     author?: AtomAuthor;
@@ -203,6 +203,8 @@ export interface AtomEntry extends BaseItem {
     /** A short summary, abstract, or excerpt of the entry. */
     summary?: string;
     extra: Record<string, any>;
+    /** Identifies a category the entry belongs to. */
+    category?: AtomCategory;
     /** If an entry is copied from one feed into another, the source element preserves metadata from the source feed. */
     source?: AtomSource;
     id: string;

@@ -111,6 +111,19 @@ describe("RSS namespace extras", () => {
         expect(rss.items[0].extra?.content?.encoded).to.equal("<p>Full text</p>");
     });
 
+    // <content> is a stop node for Atom content extraction. That pattern must not
+    // swallow the prefixed elements whose local name merely starts the same way.
+    it("keeps content:encoded and media:content clear of the content stop node", () => {
+        const rss = parseFeed(feed("",
+            "<content:encoded><![CDATA[<p>Full text</p>]]></content:encoded>" +
+            '<media:content url="https://example.com/v.mp4" type="video/mp4"/>'
+        )) as RSSChannel;
+        expect(rss.items[0].contentEncoded).to.equal("<p>Full text</p>");
+        expect(rss.items[0].media?.contents).to.deep.equal([
+            { url: "https://example.com/v.mp4", type: "video/mp4" }
+        ]);
+    });
+
     it("exposes Dublin Core fields under extra.dc", () => {
         const rss = parseFeed(feed("", "<dc:creator>Jo</dc:creator><dc:date>2024-01-01</dc:date>")) as RSSChannel;
         expect(rss.items[0].extra?.dc).to.deep.equal({ creator: "Jo", date: "2024-01-01" });

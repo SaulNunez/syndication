@@ -1,5 +1,5 @@
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
-import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory, AtomSource, JSONFeed } from "./types.js";
+import { AtomEntry, AtomFeed, RSSAuthor, RSSChannel, RSSItem, AtomAuthor, AtomCategory, AtomSource, JSONFeed, Media, MediaContent, MediaThumbnail } from "./types.js";
 
 const builder = new XMLBuilder({
     ignoreAttributes: false,
@@ -167,6 +167,7 @@ function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthor?: AtomAuth
         contributors: entryRaw.contributor ? (Array.isArray(entryRaw.contributor) ? entryRaw.contributor.map(getAtomAuthor) : [getAtomAuthor(entryRaw.contributor)]) : undefined,
         category: getAtomCategory(entryRaw.category),
         source: getAtomSource(entryRaw.source),
+        media: parseMedia(entryRaw),
         extra: processNamespaces(entryRaw)
     };
 }
@@ -307,6 +308,8 @@ function mapItem(itemRaw: any): RSSItem {
             length: parseEnclosureLength(enclosureRaw['@_length']),
             type: enclosureRaw['@_type']
         } : undefined,
+        contentEncoded: getTextValue(itemRaw['content:encoded']),
+        media: parseMedia(itemRaw),
         extra: processNamespaces(itemRaw)
     };
 
@@ -340,6 +343,75 @@ function mapChannelImage(imageRaw: any): RSSChannel["image"] {
         title: raw.title,
         link: raw.link
     };
+}
+
+function getTextValue(raw: any): string | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (typeof raw === "object") return raw["#text"] !== undefined ? String(raw["#text"]) : undefined;
+    return String(raw);
+}
+
+function toArray(raw: any): any[] {
+    if (raw === undefined || raw === null) return [];
+    return Array.isArray(raw) ? raw : [raw];
+}
+
+function parseDimension(raw: any): number | undefined {
+    if (raw === undefined || raw === null || raw === "") return undefined;
+    const num = parseInt(String(raw), 10);
+    return isNaN(num) ? undefined : num;
+}
+
+function mapMediaThumbnail(thumbRaw: any): MediaThumbnail | undefined {
+    if (!thumbRaw || !thumbRaw['@_url']) return undefined;
+    const thumbnail: MediaThumbnail = { url: thumbRaw['@_url'] };
+    const width = parseDimension(thumbRaw['@_width']);
+    const height = parseDimension(thumbRaw['@_height']);
+    if (width !== undefined) thumbnail.width = width;
+    if (height !== undefined) thumbnail.height = height;
+    return thumbnail;
+}
+
+/**
+ * Collects Media RSS elements from an item or entry. <media:group> elements
+ * are flattened, and thumbnails nested inside <media:content> are included.
+ * @see https://www.rssboard.org/media-rss
+ */
+function parseMedia(itemRaw: any): Media | undefined {
+    const contents: MediaContent[] = [];
+    const thumbnails: MediaThumbnail[] = [];
+
+    const collect = (node: any) => {
+        for (const contentRaw of toArray(node['media:content'])) {
+            if (!contentRaw || typeof contentRaw !== 'object') continue;
+            if (contentRaw['@_url']) {
+                const content: MediaContent = { url: contentRaw['@_url'] };
+                if (contentRaw['@_type']) content.type = contentRaw['@_type'];
+                if (contentRaw['@_medium']) content.medium = contentRaw['@_medium'];
+                const width = parseDimension(contentRaw['@_width']);
+                const height = parseDimension(contentRaw['@_height']);
+                if (width !== undefined) content.width = width;
+                if (height !== undefined) content.height = height;
+                contents.push(content);
+            }
+            for (const thumbRaw of toArray(contentRaw['media:thumbnail'])) {
+                const thumbnail = mapMediaThumbnail(thumbRaw);
+                if (thumbnail) thumbnails.push(thumbnail);
+            }
+        }
+        for (const thumbRaw of toArray(node['media:thumbnail'])) {
+            const thumbnail = mapMediaThumbnail(thumbRaw);
+            if (thumbnail) thumbnails.push(thumbnail);
+        }
+    };
+
+    collect(itemRaw);
+    for (const groupRaw of toArray(itemRaw['media:group'])) {
+        if (groupRaw && typeof groupRaw === 'object') collect(groupRaw);
+    }
+
+    if (contents.length === 0 && thumbnails.length === 0) return undefined;
+    return { contents, thumbnails };
 }
 
 export function getAuthorInfo(authorString: string): RSSAuthor | string {

@@ -349,6 +349,17 @@ describe("Atom content ordering", () => {
         );
     });
 
+    it("still collects media:group on an entry whose content is a stop node", () => {
+        const atom = parseFeed(feed(entry(
+            '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Hi <i>there</i></p></div></content>' +
+            '<media:group><media:content url="https://example.com/a.mp4"/></media:group>'
+        ), 'xmlns:media="http://search.yahoo.com/mrss/"')) as AtomFeed;
+        expect(atom.items[0].content?.value).to.equal(
+            '<div xmlns="http://www.w3.org/1999/xhtml"><p>Hi <i>there</i></p></div>'
+        );
+        expect(atom.items[0].media?.contents).to.deep.equal([{ url: "https://example.com/a.mp4" }]);
+    });
+
     it("preserves whitespace inside the content markup", () => {
         const atom = parseFeed(feed(entry(
             '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><pre>a  b</pre></div></content>'

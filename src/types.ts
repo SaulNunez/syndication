@@ -78,6 +78,46 @@ interface Enclosure {
 }
 
 /**
+ * A media object from the Media RSS namespace (<media:content>).
+ * @see https://www.rssboard.org/media-rss#media-content
+ */
+export interface MediaContent {
+    /** The direct URL to the media object. */
+    url: string;
+    /** Standard MIME type of the object. */
+    type?: string;
+    /** The type of object: "image", "audio", "video", "document" or "executable". */
+    medium?: string;
+    /** Width of the media object, in pixels. */
+    width?: number;
+    /** Height of the media object, in pixels. */
+    height?: number;
+}
+
+/**
+ * A representative image for a media object (<media:thumbnail>).
+ * @see https://www.rssboard.org/media-rss#media-thumbnails
+ */
+export interface MediaThumbnail {
+    /** The URL of the thumbnail. */
+    url: string;
+    /** Width of the thumbnail, in pixels. */
+    width?: number;
+    /** Height of the thumbnail, in pixels. */
+    height?: number;
+}
+
+/**
+ * Media RSS elements attached to an item. Elements nested inside
+ * <media:group> are flattened into the same lists.
+ * @see https://www.rssboard.org/media-rss
+ */
+export interface Media {
+    contents: MediaContent[];
+    thumbnails: MediaThumbnail[];
+}
+
+/**
  * Represents an item in an RSS 2.0 channel.
  * @see https://www.rssboard.org/rss-2-0#hrelementsOfLtitemgt
  */
@@ -94,6 +134,13 @@ export interface RSSItem extends BaseItem {
     enclosure?: Enclosure;
     /** The item synopsis. */
     description: string;
+    /**
+     * The full content of the item, from the RSS content module (<content:encoded>).
+     * @see https://web.resource.org/rss/1.0/modules/content/
+     */
+    contentEncoded?: string;
+    /** Media RSS elements attached to the item, if any. */
+    media?: Media;
     /**
      * If item is an iTunes podcast, this object will contain fields from the iTunes namespace
      * @see https://help.apple.com/itc/podcasts_connect/#/itcbaf351599
@@ -202,6 +249,8 @@ export interface AtomEntry extends BaseItem {
     updated?: string;
     /** A short summary, abstract, or excerpt of the entry. */
     summary?: string;
+    /** Media RSS elements attached to the entry, if any. */
+    media?: Media;
     extra: Record<string, any>;
     /** If an entry is copied from one feed into another, the source element preserves metadata from the source feed. */
     source?: AtomSource;

@@ -269,6 +269,74 @@ describe("Atom xhtml text constructs", () => {
         expect(atom.items[0].summary).to.contain("Summarised");
     });
 
+    // Text constructs are parsed as stop nodes, so an XHTML payload keeps its
+    // markup exactly as authored instead of being rebuilt from a parsed object.
+    it("keeps text in place alongside inline elements in a title", () => {
+        const mixed = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Hello <b>World</b>!</div></title>
+            <id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(mixed) as AtomFeed).title).to.equal(
+            '<div xmlns="http://www.w3.org/1999/xhtml">Hello <b>World</b>!</div>'
+        );
+    });
+
+    it("keeps document order in a title when sibling element names repeat", () => {
+        const repeated = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title type="xhtml"><div><p>A</p><span>B</span><p>C</p></div></title>
+            <id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(repeated) as AtomFeed).title).to.equal("<div><p>A</p><span>B</span><p>C</p></div>");
+    });
+
+    it("keeps an xhtml summary's markup in order", () => {
+        const atom = parseFeed(feed(entry(
+            '<summary type="xhtml"><div>Sum <i>mary</i> here</div></summary>'
+        ))) as AtomFeed;
+        expect(atom.items[0].summary).to.equal("<div>Sum <i>mary</i> here</div>");
+    });
+
+    // Stop nodes skip the parser's own entity decoding and CDATA unwrapping, so
+    // escaped text constructs have to be put back together by hand.
+    it("decodes entities in an escaped title", () => {
+        const entities = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title>Bug &amp; fix caf&#233;</title><id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(entities) as AtomFeed).title).to.equal("Bug & fix café");
+    });
+
+    it("unwraps CDATA in a title", () => {
+        const cdata = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title><![CDATA[Raw & <b>markup</b>]]></title><id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(cdata) as AtomFeed).title).to.equal("Raw & <b>markup</b>");
+    });
+
+    it("decodes a type=html title exactly once", () => {
+        const html = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title type="html">&lt;b&gt;bold&lt;/b&gt; &amp;amp; more</title>
+            <id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(html) as AtomFeed).title).to.equal("<b>bold</b> &amp; more");
+    });
+
+    it("still collapses whitespace in a multi-line title", () => {
+        const multiline = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+            <title>
+                Spread   over
+                lines
+            </title><id>tag:example.com,2024:feed</id></feed>`;
+        expect((parseFeed(multiline) as AtomFeed).title).to.equal("Spread over lines");
+    });
+
+    // RSS has its own <title>, which the Atom-scoped stop nodes must not touch.
+    it("leaves RSS titles and descriptions to the parser's own decoding", () => {
+        const rss = `<?xml version="1.0"?><rss version="2.0"><channel>
+            <title>Bug &amp; fix</title><link>https://example.com/</link>
+            <description><![CDATA[<p>desc</p>]]></description>
+            <item><title>Item &amp; co</title><link>https://example.com/1</link>
+            <description>d</description></item></channel></rss>`;
+        const channel = parseFeed(rss) as any;
+        expect(channel.title).to.equal("Bug & fix");
+        expect(channel.description).to.equal("<p>desc</p>");
+        expect(channel.items[0].title).to.equal("Item & co");
+    });
+
     it("leaves a plain text title untouched", () => {
         const plain = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
             <title type="text">Just text</title><id>tag:example.com,2024:feed</id></feed>`;
@@ -365,5 +433,87 @@ describe("Atom content ordering", () => {
             '<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><pre>a  b</pre></div></content>'
         ))) as AtomFeed;
         expect(atom.items[0].content?.value).to.contain("a  b");
+    });
+});
+
+describe("Atom repeated people and categories", () => {
+    const manyPeople = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <title>T</title><id>tag:example.com,2024:feed</id>
+        <author><name>A</name><email>a@example.com</email></author><author><name>B</name></author>
+        <contributor><name>C1</name></contributor><contributor><name>C2</name></contributor>
+        <category term="one" scheme="https://example.com/s" label="One"/>
+        <category term="two"/>
+        <entry><id>tag:example.com,2024:1</id><title>E</title>
+            <author><name>EA</name></author><author><name>EB</name></author>
+            <category term="ec1"/><category term="ec2"/>
+        </entry></feed>`;
+
+    it("exposes every feed author, keeping `author` as the first", () => {
+        const atom = parseFeed(manyPeople) as AtomFeed;
+        expect(atom.authors).to.deep.equal([{ name: "A", email: "a@example.com" }, { name: "B" }]);
+        expect(atom.author).to.deep.equal({ name: "A", email: "a@example.com" });
+    });
+
+    it("exposes every feed contributor, keeping `contributor` as the first", () => {
+        const atom = parseFeed(manyPeople) as AtomFeed;
+        expect(atom.contributors).to.deep.equal([{ name: "C1" }, { name: "C2" }]);
+        expect(atom.contributor).to.deep.equal({ name: "C1" });
+    });
+
+    it("exposes every feed category, keeping `category` as the first", () => {
+        const atom = parseFeed(manyPeople) as AtomFeed;
+        expect(atom.categories).to.deep.equal([
+            { term: "one", scheme: "https://example.com/s", label: "One" },
+            { term: "two" }
+        ]);
+        expect(atom.category).to.deep.equal({ term: "one", scheme: "https://example.com/s", label: "One" });
+    });
+
+    it("exposes every entry author and category", () => {
+        const entryParsed = (parseFeed(manyPeople) as AtomFeed).items[0];
+        expect(entryParsed.authors).to.deep.equal([{ name: "EA" }, { name: "EB" }]);
+        expect(entryParsed.author).to.deep.equal({ name: "EA" });
+        expect(entryParsed.categories).to.deep.equal([{ term: "ec1" }, { term: "ec2" }]);
+    });
+
+    it("wraps a lone author and category into their arrays", () => {
+        const atom = parseFeed(feed(
+            '<author><name>Solo</name></author><category term="only"/>'
+        )) as AtomFeed;
+        expect(atom.authors).to.deep.equal([{ name: "Solo" }]);
+        expect(atom.categories).to.deep.equal([{ term: "only" }]);
+    });
+
+    it("leaves the arrays undefined when the elements are absent", () => {
+        const atom = parseFeed(feed(entry(""))) as AtomFeed;
+        expect(atom.authors).to.equal(undefined);
+        expect(atom.categories).to.equal(undefined);
+        expect(atom.contributors).to.equal(undefined);
+        expect(atom.items[0].categories).to.equal(undefined);
+    });
+
+    it("inherits the whole feed author list for an entry with none", () => {
+        const atom = parseFeed(feed(
+            "<author><name>Feed A</name></author><author><name>Feed B</name></author>" + entry("")
+        )) as AtomFeed;
+        expect(atom.items[0].authors).to.deep.equal([{ name: "Feed A" }, { name: "Feed B" }]);
+        expect(atom.items[0].author).to.deep.equal({ name: "Feed A" });
+    });
+
+    it("skips a category that names no term", () => {
+        const atom = parseFeed(feed(
+            '<category label="no term"/><category term="real"/>'
+        )) as AtomFeed;
+        expect(atom.categories).to.deep.equal([{ term: "real" }]);
+    });
+
+    it("exposes a source's authors and categories", () => {
+        const atom = parseFeed(feed(entry(
+            "<source><id>tag:example.com,2024:src</id><title>S</title>" +
+            "<author><name>SA</name></author><author><name>SB</name></author>" +
+            '<category term="sc1"/><category term="sc2"/></source>'
+        ))) as AtomFeed;
+        expect(atom.items[0].source?.authors).to.deep.equal([{ name: "SA" }, { name: "SB" }]);
+        expect(atom.items[0].source?.categories).to.deep.equal([{ term: "sc1" }, { term: "sc2" }]);
     });
 });

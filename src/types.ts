@@ -200,12 +200,18 @@ export interface AtomAuthor {
  */
 export interface AtomSource extends BaseChannel {
     feedType: "atom";
-    /** The author of the feed. */
+    /** The author of the feed. The first, when the feed names several. */
     author?: AtomAuthor;
-    /** Categories associated with the feed. */
+    /** Every author the feed names, in document order. */
+    authors?: AtomAuthor[];
+    /** A category associated with the feed. The first, when it names several. */
     category?: AtomCategory;
-    /** People who contributed to the feed. */
+    /** Every category the feed names, in document order. */
+    categories?: AtomCategory[];
+    /** A person who contributed to the feed. The first, when it names several. */
     contributor?: AtomAuthor;
+    /** Everyone the feed names as a contributor, in document order. */
+    contributors?: AtomAuthor[];
     /** Identifies the software used to generate the feed. */
     generator?: string;
     /** An IRI reference to an icon representing the feed. */
@@ -252,12 +258,17 @@ export interface AtomEntry extends BaseItem {
     /** Media RSS elements attached to the entry, if any. */
     media?: Media;
     extra: Record<string, any>;
-    /** Identifies a category the entry belongs to. */
+    /** A category the entry belongs to. The first, when it names several. */
     category?: AtomCategory;
+    /** Every category the entry names, in document order. */
+    categories?: AtomCategory[];
     /** If an entry is copied from one feed into another, the source element preserves metadata from the source feed. */
     source?: AtomSource;
     id: string;
+    /** The entry's author, inherited from the feed when the entry names none. */
     author: AtomAuthor;
+    /** Every author the entry names, falling back to the feed's. */
+    authors?: AtomAuthor[];
     contributors?: AtomAuthor[];
 }
 

@@ -29,6 +29,26 @@ console.log(entry.itunes?.episode);
 console.log(entry.itunes?.season);
 ```
 
+### Media RSS Support
+It supports the [Media RSS](https://www.rssboard.org/media-rss) namespace in RSS items and Atom entries, commonly used for article photos and video thumbnails.
+
+`media:content` and `media:thumbnail` elements are available in the `media` property, with elements inside `media:group` flattened into the same lists.
+
+```typescript
+const rss = parseFeed(sample) as RSSFeed;
+const entry = rss.items[0];
+console.log(entry.media?.contents[0]?.url, entry.media?.contents[0]?.width);
+console.log(entry.media?.thumbnails[0]?.url);
+```
+
+### Full content
+For RSS items that include the full content of the item using the content module (`content:encoded`), it's available in the `contentEncoded` property, separate from the `description`.
+
+```typescript
+const rss = parseFeed(sample) as RSSFeed;
+console.log(rss.items[0].contentEncoded);
+```
+
 ### Additional fields
 It supports processing additional fields in RSS feeds.
 

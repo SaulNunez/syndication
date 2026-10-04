@@ -21,9 +21,12 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
         ignoreAttributes: false,
         attributeNamePrefix: "@_",
         textNodeName: "#text",
-        // Keep <content> as raw inner XML: rebuilding it from the parsed object
-        // form loses sibling order and the position of text among inline elements.
-        stopNodes: ["*.content"]
+        // Keep <content> and Atom's text constructs as raw inner XML: rebuilding
+        // them from the parsed object form loses sibling order and the position
+        // of text among inline elements. The paths are spelled out from the root
+        // so that RSS titles and descriptions keep the parser's own entity
+        // decoding and CDATA unwrapping.
+        stopNodes: ["*.content", ...ATOM_TEXT_CONSTRUCT_PATHS]
     });
 
     let parsed: any;
@@ -78,26 +81,32 @@ export function parseFeed(rssString: string): RSSChannel | AtomFeed | JSONFeed {
 function parseAtom(feedRaw: any): AtomFeed {
     const feedBaseUrl = feedRaw["@_xml:base"];
     // RFC 4287 4.2.1: an entry with no author of its own inherits the feed's.
-    const feedAuthor = feedRaw.author ? getAtomAuthor(feedRaw.author) : undefined;
+    const feedAuthors = getAtomPeople(feedRaw.author);
+    const feedContributors = getAtomPeople(feedRaw.contributor);
+    const feedCategories = getAtomCategories(feedRaw.category);
     const entries: AtomEntry[] = Array.isArray(feedRaw.entry)
-        ? feedRaw.entry.map((entry: any) => mapAtomEntry(entry, feedBaseUrl, feedAuthor))
-        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl, feedAuthor)] : []);
+        ? feedRaw.entry.map((entry: any) => mapAtomEntry(entry, feedBaseUrl, feedAuthors))
+        : (feedRaw.entry ? [mapAtomEntry(feedRaw.entry, feedBaseUrl, feedAuthors)] : []);
 
     return {
         feedType: "atom",
         id: feedRaw.id,
-        title: getTypeContent(feedRaw.title),
+        title: getTextConstruct(feedRaw.title),
         updated: feedRaw.updated || feedRaw.modified,
         link: resolveUrl(getLinkHref(feedRaw.link), feedBaseUrl),
-        subtitle: getTypeContent(feedRaw.subtitle || feedRaw.tagline),
-        rights: feedRaw.rights ? getTypeContent(feedRaw.rights) : (feedRaw.copyright ? getTypeContent(feedRaw.copyright) : undefined),
+        subtitle: getTextConstruct(feedRaw.subtitle || feedRaw.tagline),
+        rights: feedRaw.rights ? getTextConstruct(feedRaw.rights) : (feedRaw.copyright ? getTextConstruct(feedRaw.copyright) : undefined),
         generator: getTypeContent(feedRaw.generator),
-        author: feedAuthor,
-        category: getAtomCategory(feedRaw.category),
+        author: feedAuthors[0],
+        authors: orUndefined(feedAuthors),
+        contributor: feedContributors[0],
+        contributors: orUndefined(feedContributors),
+        category: feedCategories[0],
+        categories: orUndefined(feedCategories),
         logo: feedRaw.logo,
         icon: feedRaw.icon,
         items: entries,
-        description: getTypeContent(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
+        description: getTextConstruct(feedRaw.subtitle), // Map subtitle to description for BaseChannel compatibility
         // <entry> is excluded so an entry's namespaces stay on the entry.
         extra: processNamespaces(feedRaw, ["entry"])
     };
@@ -142,8 +151,11 @@ function mapJSONFeedItem(itemRaw: any): any {
     };
 }
 
-function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthor?: AtomAuthor): AtomEntry {
+function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthors: AtomAuthor[] = []): AtomEntry {
     const entryBaseUrl = entryRaw["@_xml:base"] || feedBaseUrl;
+    const ownAuthors = getAtomPeople(entryRaw.author);
+    const entryAuthors = ownAuthors.length > 0 ? ownAuthors : feedAuthors;
+    const entryCategories = getAtomCategories(entryRaw.category);
     const contentRaw = entryRaw.content;
     const contentType = contentRaw ? contentRaw["@_type"] : undefined;
     let contentValue = contentRaw ? getContentValue(contentRaw, contentType) : undefined;
@@ -154,18 +166,20 @@ function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthor?: AtomAuth
 
     return {
         id: entryRaw.id,
-        title: getTypeContent(entryRaw.title),
+        title: getTextConstruct(entryRaw.title),
         updated: entryRaw.updated || entryRaw.modified,
         published: entryRaw.published || entryRaw.issued || entryRaw.created,
         link: resolveUrl(getLinkHref(entryRaw.link), entryBaseUrl),
-        summary: getTypeContent(entryRaw.summary),
+        summary: getTextConstruct(entryRaw.summary),
         content: contentRaw ? {
             type: contentType,
             value: contentValue
         } : undefined,
-        author: entryRaw.author ? getAtomAuthor(entryRaw.author) : (feedAuthor || { name: "" }),
-        contributors: entryRaw.contributor ? (Array.isArray(entryRaw.contributor) ? entryRaw.contributor.map(getAtomAuthor) : [getAtomAuthor(entryRaw.contributor)]) : undefined,
-        category: getAtomCategory(entryRaw.category),
+        author: entryAuthors[0] || { name: "" },
+        authors: orUndefined(entryAuthors),
+        contributors: orUndefined(getAtomPeople(entryRaw.contributor)),
+        category: entryCategories[0],
+        categories: orUndefined(entryCategories),
         source: getAtomSource(entryRaw.source),
         media: parseMedia(entryRaw),
         extra: processNamespaces(entryRaw)
@@ -173,6 +187,52 @@ function mapAtomEntry(entryRaw: any, feedBaseUrl?: string, feedAuthor?: AtomAuth
 }
 
 /** True for the Atom text-construct types whose payload is markup, not escaped text. */
+/**
+ * Atom text constructs, which may hold XHTML. Spelled out per path because a
+ * `*.title` wildcard would also catch RSS's own <title> elements.
+ * @see https://www.rfc-editor.org/rfc/rfc4287#section-3.1
+ */
+const ATOM_TEXT_CONSTRUCT_PATHS = [
+    "feed.title", "feed.subtitle", "feed.tagline", "feed.rights", "feed.copyright",
+    "feed.entry.title", "feed.entry.summary", "feed.entry.rights",
+    "feed.entry.source.title", "feed.entry.source.subtitle", "feed.entry.source.rights"
+];
+
+const CDATA_PATTERN = /^<!\[CDATA\[([\s\S]*)\]\]>$/;
+
+/** Stop nodes keep CDATA section markers, which the parser would otherwise strip. */
+function stripCdata(text: string): string {
+    const match = text.match(CDATA_PATTERN);
+    return match ? match[1] : text;
+}
+
+/**
+ * Reads an Atom text construct parsed as a stop node. A type="xhtml" construct
+ * keeps its markup verbatim; every other type is escaped text, so it still needs
+ * the XML-level entity decoding the stop node skipped.
+ */
+function getTextConstruct(contentRaw: any): string {
+    if (Array.isArray(contentRaw)) return getTextConstruct(contentRaw[0]);
+    if (contentRaw === undefined || contentRaw === null) return "";
+
+    let text: string;
+    let contentType: string | undefined;
+
+    if (typeof contentRaw === "object") {
+        contentType = contentRaw["@_type"];
+        const raw = contentRaw["#text"];
+        // An empty element, or one carrying only attributes, has no text at all.
+        if (raw === undefined || raw === null) return "";
+        text = String(raw);
+    } else {
+        text = String(contentRaw);
+    }
+
+    text = stripCdata(text.trim());
+    if (!isMarkupConstruct(contentType)) text = decodeHtmlEntities(text);
+    return text.replace(/\s+/g, ' ').trim();
+}
+
 function isMarkupConstruct(contentType?: string): boolean {
     return typeof contentType === "string" && (contentType === "xhtml" || contentType.includes("xml"));
 }
@@ -212,18 +272,27 @@ function getAtomAuthor(authorRaw: any): AtomAuthor {
     // Atom permits several <author> elements; the declared type holds one, so
     // take the first rather than reading fields off the array.
     const raw = Array.isArray(authorRaw) ? authorRaw[0] : authorRaw;
-    return {
-        name: raw.name,
-        email: raw.email,
-        uri: raw.uri || raw.url
-    };
+
+    // Absent parts are left off rather than set to undefined, so a name-only
+    // person construct reads as { name } instead of carrying two empty keys.
+    const author: AtomAuthor = { name: raw.name };
+    const uri = raw.uri || raw.url;
+    if (raw.email !== undefined) author.email = raw.email;
+    if (uri !== undefined) author.uri = uri;
+    return author;
 }
 
-/** Reads the first <category>; its data lives entirely in attributes. */
-function getAtomCategory(categoryRaw: any): AtomCategory | undefined {
-    if (!categoryRaw) return undefined;
-    const raw = Array.isArray(categoryRaw) ? categoryRaw[0] : categoryRaw;
-    if (!raw || raw["@_term"] === undefined) return undefined;
+/** Reads every <author> or <contributor> person construct, in document order. */
+function getAtomPeople(peopleRaw: any): AtomAuthor[] {
+    if (!peopleRaw) return [];
+    return toArray(peopleRaw)
+        .filter((raw: any) => raw && typeof raw === 'object')
+        .map((raw: any) => getAtomAuthor(raw));
+}
+
+/** Reads one <category>; its data lives entirely in attributes. */
+function mapAtomCategory(raw: any): AtomCategory | undefined {
+    if (!raw || typeof raw !== 'object' || raw["@_term"] === undefined) return undefined;
 
     const category: AtomCategory = { term: String(raw["@_term"]) };
     if (raw["@_scheme"] !== undefined) category.scheme = String(raw["@_scheme"]);
@@ -231,24 +300,44 @@ function getAtomCategory(categoryRaw: any): AtomCategory | undefined {
     return category;
 }
 
+/** Reads every <category>, in document order, skipping any that names no term. */
+function getAtomCategories(categoryRaw: any): AtomCategory[] {
+    if (!categoryRaw) return [];
+    return toArray(categoryRaw)
+        .map(mapAtomCategory)
+        .filter((category): category is AtomCategory => category !== undefined);
+}
+
+/** undefined rather than [] so an absent element leaves the field off entirely. */
+function orUndefined<T>(values: T[]): T[] | undefined {
+    return values.length > 0 ? values : undefined;
+}
+
 /** An entry's <source> preserves metadata from the feed it was copied out of. */
 function getAtomSource(sourceRaw: any): AtomSource | undefined {
     if (!sourceRaw) return undefined;
     const raw = Array.isArray(sourceRaw) ? sourceRaw[0] : sourceRaw;
 
-    const subtitle = getTypeContent(raw.subtitle || raw.tagline);
+    const subtitle = getTextConstruct(raw.subtitle || raw.tagline);
+    const sourceAuthors = getAtomPeople(raw.author);
+    const sourceContributors = getAtomPeople(raw.contributor);
+    const sourceCategories = getAtomCategories(raw.category);
     return {
         feedType: "atom",
         id: raw.id,
-        title: getTypeContent(raw.title),
+        title: getTextConstruct(raw.title),
         link: getLinkHref(raw.link),
         updated: raw.updated || raw.modified,
         subtitle: subtitle,
         description: subtitle,
-        rights: raw.rights ? getTypeContent(raw.rights) : (raw.copyright ? getTypeContent(raw.copyright) : undefined),
+        rights: raw.rights ? getTextConstruct(raw.rights) : (raw.copyright ? getTextConstruct(raw.copyright) : undefined),
         generator: getTypeContent(raw.generator),
-        author: raw.author ? getAtomAuthor(raw.author) : undefined,
-        category: getAtomCategory(raw.category),
+        author: sourceAuthors[0],
+        authors: orUndefined(sourceAuthors),
+        contributor: sourceContributors[0],
+        contributors: orUndefined(sourceContributors),
+        category: sourceCategories[0],
+        categories: orUndefined(sourceCategories),
         logo: raw.logo,
         icon: raw.icon
     };
@@ -599,34 +688,49 @@ function processNamespaces(obj: any, skipKeys: string[] = []): any {
         }
     };
 
-    const extractAndProcess = (node: any, isRoot = false) => {
+    /**
+     * `parentNs` is the prefix of the nearest namespaced ancestor. processNode
+     * already captured that ancestor's entire subtree, so a descendant under the
+     * same prefix must not be collected again at the top level -- that is what
+     * used to surface <itunes:owner>'s name and email as extra.itunes.name.
+     * A descendant under a *different* prefix is still collected, so something
+     * like <mi:focalRegion> inside <media:content> stays reachable as extra.mi.
+     */
+    const extractAndProcess = (node: any, isRoot = false, parentNs?: string) => {
         if (!node || typeof node !== 'object') return;
 
         for (const k in node) {
             if (isRoot && skipKeys.includes(k)) continue;
+            if (k.startsWith('@_') || k === '#text') continue;
 
-            if (k.includes(':') && !k.startsWith('@_')) {
+            let childNs = parentNs;
+
+            if (k.includes(':')) {
                 const [ns, prop] = k.split(/:(.+)/);
-                if (!extra[ns]) extra[ns] = {};
+                childNs = ns;
 
-                const processed = processNode(node[k], ns);
+                if (ns !== parentNs) {
+                    if (!extra[ns]) extra[ns] = {};
+                    const processed = processNode(node[k], ns);
 
-                if (extra[ns][prop]) {
-                    if (Array.isArray(extra[ns][prop])) {
-                        extra[ns][prop].push(processed);
+                    if (extra[ns][prop]) {
+                        if (Array.isArray(extra[ns][prop])) {
+                            extra[ns][prop].push(processed);
+                        } else {
+                            extra[ns][prop] = [extra[ns][prop], processed];
+                        }
                     } else {
-                        extra[ns][prop] = [extra[ns][prop], processed];
+                        extra[ns][prop] = processed;
                     }
-                } else {
-                    extra[ns][prop] = processed;
                 }
             }
 
-            if (Array.isArray(node[k])) {
+            const value = node[k];
+            if (Array.isArray(value)) {
                 // Not a bare reference: forEach would pass the index as isRoot.
-                node[k].forEach((child: any) => extractAndProcess(child));
-            } else if (typeof node[k] === 'object') {
-                extractAndProcess(node[k]);
+                value.forEach((child: any) => extractAndProcess(child, false, childNs));
+            } else if (typeof value === 'object') {
+                extractAndProcess(value, false, childNs);
             }
         }
     };

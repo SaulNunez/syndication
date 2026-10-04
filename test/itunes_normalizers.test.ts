@@ -158,13 +158,32 @@ describe("iTunes fields outside the typed object", () => {
         expect(rss.extra?.itunes?.block).to.equal("yes");
     });
 
-    // extractAndProcess recurses into <itunes:owner>'s children and collects them
-    // a second time at the top level of extra.itunes.
-    it("also hoists an owner's nested children to the top of extra.itunes", () => {
+    // An owner's children belong to the owner. They used to be collected a second
+    // time at the top level of extra.itunes, which made extra.itunes.name look
+    // like a channel-level element.
+    it("keeps an owner's nested children inside the owner", () => {
         const rss = parseFeed(feed(
             "<itunes:owner><itunes:name>N</itunes:name><itunes:email>e@example.com</itunes:email></itunes:owner>"
         )) as RSSChannel;
-        expect(rss.extra?.itunes?.name).to.equal("N");
-        expect(rss.extra?.itunes?.email).to.equal("e@example.com");
+        expect(rss.extra?.itunes?.owner).to.deep.equal({ name: "N", email: "e@example.com" });
+        expect(Object.keys(rss.extra?.itunes ?? {})).to.deep.equal(["owner"]);
+    });
+
+    // A differently-prefixed descendant is still reachable at the top level, which
+    // is how <mi:*> inside <media:content> is found without walking the tree.
+    it("still collects a descendant under a different prefix", () => {
+        const nested = `<?xml version="1.0"?>
+        <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:mi="http://schemas.ingestion.microsoft.com/common/">
+          <channel><title>T</title><link>l</link><description>D</description>
+            <item><title>A</title><link>l</link><description>d</description>
+              <media:content url="https://example.com/i.jpg">
+                <mi:focalRegion><mi:x1>120</mi:x1></mi:focalRegion>
+              </media:content>
+            </item>
+          </channel></rss>`;
+        const item = (parseFeed(nested) as RSSChannel).items[0];
+        expect(item.extra?.mi?.focalRegion).to.deep.equal({ x1: "120" });
+        // ...and the same data stays in place under its parent.
+        expect(item.extra?.media?.content?.children?.mi?.focalRegion).to.deep.equal({ x1: "120" });
     });
 });
